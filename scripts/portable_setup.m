@@ -18,7 +18,10 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <unistd.h>
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function" // MetalFX environment: Overwatch only
 #include "candidate_contract.generated.h"
+#pragma clang diagnostic pop
 
 static NSFileManager *fm;
 static NSString *root;
@@ -106,7 +109,7 @@ static void ownRoot(NSString *requested) {
         struct statfs mounted;
         if (statfs(volume.fileSystemRepresentation,&mounted) || strcmp(mounted.f_mntonname,volume.fileSystemRepresentation)) fail(@"install_location_unavailable");
     }
-    NSString *marker = join(root,@".overwatch-2-mac-owner");
+    NSString *marker = join(root,@".macvolvo-owner");
     if ([fm fileExistsAtPath:root] && ![fm fileExistsAtPath:marker] &&
         [fm contentsOfDirectoryAtPath:root error:nil].count) fail(@"directory_not_owned_by_app");
     // New locations only: an existing installation is never re-judged.
@@ -118,8 +121,8 @@ static void ownRoot(NSString *requested) {
     int markerFD = open(marker.fileSystemRepresentation,O_RDWR|O_CREAT|O_NOFOLLOW,0600);
     if (markerFD < 0) fail(@"invalid_ownership_marker");
     char bytes[32] = {0}; ssize_t n=read(markerFD,bytes,sizeof(bytes));
-    if (n==0) { if(write(markerFD,"ow2-native-setup-v1\n",20)!=20) {close(markerFD);fail(@"ownership_write_failed");} }
-    else if(n!=20 || memcmp(bytes,"ow2-native-setup-v1\n",20)) {close(markerFD);fail(@"invalid_ownership_marker");}
+    if (n==0) { if(write(markerFD,"macvolvo-native-v01\n",20)!=20) {close(markerFD);fail(@"ownership_write_failed");} }
+    else if(n!=20 || memcmp(bytes,"macvolvo-native-v01\n",20)) {close(markerFD);fail(@"invalid_ownership_marker");}
     close(markerFD);
     lockFD=open(join(root,@"setup.lock").fileSystemRepresentation,O_CREAT|O_RDWR|O_NOFOLLOW,0600);
     if(lockFD<0)fail(@"setup_already_running");
@@ -142,6 +145,7 @@ static NSString *runtime(void) {
     if (![fm fileExistsAtPath:join(p,@"runtime.json")]) fail(@"runtime_missing");
     return p;
 }
+static NSString *gameList(NSString *separator); // portable_steam.h
 static NSMutableDictionary *wineEnv(NSString *engine) {
     // Keep Wine's Windows profile and shell-folder symlinks inside this new
     // environment. Never borrow the developer's HOME, account state or caches.
@@ -154,6 +158,12 @@ static NSMutableDictionary *wineEnv(NSString *engine) {
         @"DXMT_SHADER_CACHE_PATH":join(root,@"cache/shaders"),@"DXMT_LOG_LEVEL":@"error",@"DXMT_LOG_PATH":@"none",
         @"DXMT_CONFIG_FILE":[@"Z:" stringByAppendingString:[([fm fileExistsAtPath:join(root,@"dxmt.conf")]?join(root,@"dxmt.conf"):join(engine,@"config/dxmt.conf")) stringByReplacingOccurrencesOfString:@"/" withString:@"\\"]],
         @"DXMT_PIPELINE_CACHE_PATH":join(root,@"cache/pipelines")}];
+    // The contract names Overwatch; MacVolvo's games take its place (portable_steam.h).
+    [env addEntriesFromDictionary:@{@"WINEMAC_MOUSELOOK":gameList(@";"),@"WINE_GAME_MODE":gameList(@","),
+        @"DXMT_PIPELINE_CACHE_NAMESPACE":@"macvolvo-v1",
+        // Chrome flags for Steam's browser (portable_steam.h); the worker's own environment
+        // can set others, for testing.
+        @"WEBHELPER_EXTRA_ARGS":NSProcessInfo.processInfo.environment[@"WEBHELPER_EXTRA_ARGS"] ?: @"--use-angle=vulkan"}];
     return env;
 }
 static NSTask *task(NSString *executable, NSArray *args, NSDictionary *env, NSString *logname) {
@@ -191,13 +201,21 @@ static BOOL busy(NSString *engine) {
     if(result!=0 && result!=124)fail(@"server_check_failed");
     return result==124;
 }
+static NSString *helperPath(NSString *name) {
+    return join([NSProcessInfo.processInfo.arguments[0] stringByDeletingLastPathComponent],name);
+}
+#include "portable_steam.h"
 #include "portable_session.h"
 #include "portable_preferences.h"
 #include "portable_retina.h"
 #include "portable_voice.h"
 #include "portable_network.h"
+// Overwatch-only (Korean accounts, MetalFX through DLSS): kept for the support commands.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
 #include "portable_korea.h"
 #include "portable_metalfx.h"
+#pragma clang diagnostic pop
 #include "portable_diagnostics.h"
 // Tests build the worker with a probe that fails, as on a Mac without Rosetta.
 #ifndef ROSETTA_PROBE
@@ -318,6 +336,7 @@ static void verifyRuntime(NSString *engine, NSString *version) {
         struct stat st;if(lstat(join(engine,name).fileSystemRepresentation,&st))fail(@"runtime_file_missing");
         // Finder writes .DS_Store into any folder a user opens; nothing loads it.
         if(S_ISREG(st.st_mode) && [name.lastPathComponent isEqual:@".DS_Store"])continue;
+        if(generatedGameApp(name))continue;
         if(!S_ISDIR(st.st_mode) && ![name isEqual:@"runtime.json"] && !files[name])fail(@"runtime_unlisted_file");
     }
     for(NSString *required in @[@"bin/wine",@"bin/wineserver",@"config/dxmt.conf",@"lib/external/libd3dshared.dylib",
@@ -378,32 +397,32 @@ static void prepare(void) {
     if(waitTask(task(join(engine,@"bin/wineserver"),@[@"-w"],wineEnv(engine),@"wineboot-wait.log"),60))fail(@"environment_initialization_busy");
     if(![fm fileExistsAtPath:join(prefix,@"system.reg")])fail(@"environment_registry_missing");
     configureRetina();
-    // The player's network and Korean account choices (portable_network.h, portable_korea.h),
-    // before Battle.net's installer first goes online. Neither stops setup; launches retry.
+    // The player's network choice (portable_network.h), before Steam's installer first goes
+    // online, and Steam's scaling (portable_steam.h). Neither stops setup; launches retry.
     configureProxy(engine,proxyDetectionChosen());
-    if(koreanSupportChosen())configureKoreanCertificate(engine,YES,YES);
+    configureScaling(engine);
     if(!registrySaved(engine,60))fail(@"environment_initialization_busy");
     // An update keeps a resolution chosen in the game since the last launch.
     NSInteger width,height;NSString *source;nextResolution(&width,&height,&source,YES);configureDisplay(width,height);
     NSMutableDictionary *s=state();s[@"prepared_runtime"]=s[@"active_runtime"];writeJSON(s,join(root,@"state.json"));
     saveStage(@"environment_ready");ownedPreparation=NO;
 }
-// The launcher stub can relaunch the client without forwarding Chromium flags.
-// Invoke the same executable as the accepted v6 launcher.
-static NSString *clientPath(void) {return join(root,@"environment/drive_c/Program Files (x86)/Battle.net/Battle.net.exe");}
+static NSString *clientPath(void) {return join(steamFolder(),@"steam.exe");}
 static void installClient(NSString *installer, NSString *expected) {
     requireRosetta();
     NSString *engine=runtime();if(busy(engine))fail(@"close_game_before_setup");
     if(![fm fileExistsAtPath:join(root,@"environment/system.reg")])fail(@"prepare_environment_first");
     if(!matches(expected,@"^[a-f0-9]{64}$") || ![hashFile(installer) isEqual:expected])fail(@"client_installer_hash_mismatch");
-    // The installer's update Agent is what stalled at 45% (portable_network.h).
     configureProxy(engine,proxyDetectionChosen());
+    // Stage and event names keep Recall's ("battlenet") so the app's state machine carries
+    // over; the client is Steam. Its installer runs silently and exits once Steam's files
+    // are in place; Steam downloads the rest when it first opens.
     saveStage(@"installing_battlenet");
-    NSTask *p=task(join(engine,@"bin/wine"),@[installer,@"--lang=enUS"],wineEnv(engine),@"battlenet-installer.log");
+    NSTask *p=task(join(engine,@"bin/wine"),@[installer,@"/S"],wineEnv(engine),@"steam-installer.log");
     event(@"battlenet_installer_open",@{@"pid":@(p.processIdentifier)});
-}
-static NSString *helperPath(NSString *name) {
-    return join([NSProcessInfo.processInfo.arguments[0] stringByDeletingLastPathComponent],name);
+    if(waitTask(p,600) || ![fm fileExistsAtPath:clientPath()])fail(@"steam_install_failed");
+    waitTask(task(join(engine,@"bin/wineserver"),@[@"-w"],wineEnv(engine),@"steam-installer-wait.log"),60);
+    event(@"steam_installed",nil);
 }
 static void closeClient(NSString *gameRunning);
 // Ends whatever is left of the Wine session (the update Agent, Wine's own services).
@@ -411,150 +430,85 @@ static void endSession(NSString *engine) {
     waitTask(task(join(engine,@"bin/wineserver"),@[@"-k"],wineEnv(engine),@"session-end.log"),15);
     if(waitTask(task(join(engine,@"bin/wineserver"),@[@"-w"],wineEnv(engine),@"session-end-wait.log"),15))fail(@"client_close_failed");
 }
-/* Battle.net (Qt around Chromium) lays itself out at Windows' 96 DPI, and Wine's Retina
- * mode shows Windows pixels at half size, so its window looked small. A Mac-sized client
- * scales both layers by 2: Qt through QT_SCALE_FACTOR, Chromium through its device scale
- * factor. Neither reaches Overwatch: the game ships no Qt, never sees Battle.net's
- * Chromium flags, and Wine's own DPI is unchanged.
- * Apple's Metal Performance HUD (Settings, launch --metal-hud 1) reaches Overwatch the
- * same way: Battle.net starts the game with its own environment. MTL_HUD_ELEMENTS lists
- * the HUD's default panel ("gamemode" is undocumented) plus the shader compiler, which
- * shows the game compiling shaders, the cause of a first match's stutters. Battle.net
- * draws on the CPU (SwiftShader), so it has no Metal layer for the HUD.
- * macOS Game Mode: the contract's WINE_GAME_MODE makes Wine start Overwatch from the
- * engine's game app (lib/wine/game-mode/Overwatch.app). launch --game-mode 0 leaves it out,
- * so the game starts as before; the app passes it only for a hidden "gameMode" default.
- * Korean account support (Settings › Advanced, portable_korea.h) reaches the game the same
- * way: WINEMAC_SCREEN_READBACK=1 has Wine's Mac driver answer screen reads with a black
- * image, so the anti-cheat's screenshots no longer crash the game.
- * So does MetalFX upscaling (Settings, launch --metalfx 1; portable_metalfx.h): the contract's
- * MetalFX environment. */
-static NSMutableDictionary *clientEnvironment(NSMutableDictionary *env, BOOL large, BOOL hud, BOOL gameMode, BOOL metalfx) {
-    if(large)env[@"QT_SCALE_FACTOR"]=@"2";
-    if(metalfx)[env addEntriesFromDictionary:candidateMetalFXEnvironment()];
-    if(koreanSupportChosen())env[@"WINEMAC_SCREEN_READBACK"]=@"1";
+/* Apple's Metal Performance HUD (Settings, launch --metal-hud 1) reaches the game through
+ * Steam, which starts it with its own environment. MTL_HUD_ELEMENTS lists the HUD's default
+ * panel ("gamemode" is undocumented) plus the shader compiler, which shows the game compiling
+ * shaders, the cause of a first match's stutters.
+ * macOS Game Mode: WINE_GAME_MODE makes Wine start each game from its game app
+ * (lib/wine/game-mode/<game>.app, portable_steam.h). launch --game-mode 0 leaves it out. */
+static NSMutableDictionary *clientEnvironment(NSMutableDictionary *env, BOOL hud, BOOL gameMode) {
     if(!gameMode)[env removeObjectForKey:@"WINE_GAME_MODE"];
     if(hud)[env addEntriesFromDictionary:@{@"MTL_HUD_ENABLED":@"1",@"MTL_HUD_DISABLE_MENU_BAR":@"1",
         @"MTL_HUD_ELEMENTS":@"device,rosetta,layersize,memory,gamemode,fps,gputime,frameinterval,frameintervalgraph,shaders"}];
     return env;
 }
-/* The pipeline helper prints progress lines ({"graphics":phase,...}) among its log
- * lines. While it runs they become graphics events for the launcher's "Preparing
- * graphics" details. Only known fields pass, bounded; the rest stays in the log. */
-static NSDictionary *graphicsProgress(NSData *line) {
-    NSDictionary *value=[NSJSONSerialization JSONObjectWithData:line options:0 error:nil];
-    if(![value isKindOfClass:NSDictionary.class] || ![value[@"graphics"] isKindOfClass:NSString.class])return nil;
-    NSString *phase=value[@"graphics"];
-    if(![@[@"kept",@"learned",@"warming",@"checking",@"preparing",@"pipelines",@"verifying",@"done"] containsObject:phase])return nil;
-    NSMutableDictionary *result=[@{@"phase":phase} mutableCopy];
-    for(NSString *key in @[@"folders",@"added",@"learned",@"ready",@"target",@"warmed"]) {
-        NSNumber *number=value[key];
-        if([number isKindOfClass:NSNumber.class] && number.longLongValue>=0 && number.longLongValue<=1000000)result[key]=@(number.longLongValue);
-    }
-    NSArray *items=value[@"items"];
-    if([phase isEqual:@"pipelines"] && [items isKindOfClass:NSArray.class]) {
-        NSMutableArray *kept=[NSMutableArray array];
-        for(NSArray *item in [items subarrayWithRange:NSMakeRange(0,MIN(items.count,(NSUInteger)400))]) {
-            if(![item isKindOfClass:NSArray.class] || item.count!=3 || ![item[0] isKindOfClass:NSString.class] || !matches(item[0],@"^[0-9a-f]{12}$")
-               || ![item[1] isKindOfClass:NSNumber.class] || ![item[2] isKindOfClass:NSNumber.class])continue;
-            double ms=[item[1] doubleValue];
-            if(ms>=0 && ms<=600000)[kept addObject:@[item[0],@(ms),@([item[2] boolValue])]];
-        }
-        result[@"items"]=kept;
-    }
-    return result;
-}
-static void (^graphicsFeed(NSString *log))(void) {
-    __block unsigned long long offset=0;NSMutableData *pending=[NSMutableData data];
-    return ^{
-        NSFileHandle *in=[NSFileHandle fileHandleForReadingAtPath:log];if(!in)return;
-        [in seekToFileOffset:offset];NSData *data=[in readDataToEndOfFile];[in closeFile];
-        offset+=data.length;[pending appendData:data];
-        for(;;) {
-            NSRange end=[pending rangeOfData:[NSData dataWithBytes:"\n" length:1] options:0 range:NSMakeRange(0,pending.length)];
-            if(end.location==NSNotFound) {if(pending.length>(1<<20))[pending setLength:0];break;}
-            NSData *line=[pending subdataWithRange:NSMakeRange(0,end.location)];
-            [pending replaceBytesInRange:NSMakeRange(0,end.location+1) withBytes:NULL length:0];
-            NSDictionary *value=line.length && ((const char *)line.bytes)[0]=='{' ? graphicsProgress(line) : nil;
-            if(value)event(@"graphics",value);
-        }
-    };
-}
-static void launchClient(BOOL diagnostic, BOOL play, BOOL large, BOOL hud, BOOL gameMode, BOOL metalfx, NSString *sharpening) {
+/* Opens Steam; with a game (play), Steam starts it (-applaunch). A running Steam receives
+ * the game from a second steam.exe, which hands it over and exits. */
+static void launchClient(BOOL diagnostic, NSString *play, BOOL fullscreen, BOOL hud, BOOL gameMode) {
     requireRosetta();
     NSString *engine=runtime();if(![fm fileExistsAtPath:clientPath()])fail(@"battlenet_not_installed");
+    const MVGame *game=play ? mvGame(play) : NULL;
+    if(play && !game)fail(@"unknown_game");
     NSArray *existing=sessionProcesses();
     if(diagnostic && existing.count)fail(@"close_game_before_maintenance");
-    // Battle.net's own command for starting Overwatch ("Pro"). A running client
-    // receives it from a second launch, which hands it over and exits.
-    NSArray *client=@[clientPath(),@"--disable-gpu-compositing",@"--from-launcher",@"--in-process-gpu",@"--use-gl=angle",@"--use-angle=swiftshader"];
-    if(large)client=[client arrayByAddingObject:@"--force-device-scale-factor=2"];
-    if(play)client=[client arrayByAddingObject:@"--exec=launch Pro"];
     // A game must start in a Wine session that began with the displays as they are now
-    // (displaySignature). Battle.net open from before a display change is closed and
-    // opened again; a running game is left alone.
+    // (displaySignature). Steam open from before a display change is closed and opened
+    // again; a running game is left alone.
     NSString *displays=displaySignature(),*sessionDisplays=state()[@"session_displays"];
     BOOL displaysChanged=displays && ![displays isEqual:sessionDisplays];
-    BOOL game=NO;for(NSDictionary *p in existing)game|=[p[@"kind"] isEqual:@"game"];
-    if(existing.count && !game && sessionDisplays && displaysChanged) {
+    BOOL running=NO;for(NSDictionary *p in existing)running|=[p[@"kind"] isEqual:@"game"];
+    if(existing.count && !running && sessionDisplays && displaysChanged) {
         event(@"displays_changed",nil);closeClient(@"close_game_before_maintenance");existing=@[];
     }
+    NSInteger width,height;NSString *source;nextResolution(&width,&height,&source,!existing.count);
+    NSInteger gameWidth=width,gameHeight=height;fittedResolution(&gameWidth,&gameHeight);
+    NSMutableArray *client=[@[clientPath(),@"-no-cef-sandbox"] mutableCopy];
+    if(game) {
+        // Windowed keeps the chosen size as the window's (Settings › the game's Fullscreen).
+        [client addObjectsFromArray:@[@"-applaunch",game->appID,@"-nojoy",fullscreen?@"-fullscreen":@"-windowed",
+            @"-w",[NSString stringWithFormat:@"%ld",(long)gameWidth],@"-h",[NSString stringWithFormat:@"%ld",(long)gameHeight]]];
+        if(game->options.length)[client addObjectsFromArray:[game->options componentsSeparatedByString:@" "]];
+    }
     if(focusSession(existing)) {
-        // Overwatch reads its default microphone when it starts; one already running keeps its own.
-        if(!game)configureVoiceMicrophone(engine,nil,YES,NO);
-        // Battle.net already open carries its own environment; this hands over the command only.
-        if(play && !game)task(join(engine,@"bin/wine"),client,clientEnvironment(wineEnv(engine),large,hud,gameMode,NO),@"battlenet-play.log");
-        if(!game)task(NSProcessInfo.processInfo.arguments[0],@[@"watch",@"--root",root],nil,[NSString stringWithFormat:@"client-monitor-%d.log",getpid()]);
+        // The game reads its default microphone when it starts; one already running keeps its own.
+        if(!running)configureVoiceMicrophone(engine,nil,YES,NO);
+        // Steam already open carries its own environment; this hands over the game only.
+        if(game && !running) {
+            [client insertObject:@"-noverifyfiles" atIndex:1];
+            task(join(engine,@"bin/wine"),client,clientEnvironment(wineEnv(engine),hud,gameMode),@"steam-play.log");
+        }
+        if(!running)task(NSProcessInfo.processInfo.arguments[0],@[@"watch",@"--root",root],nil,[NSString stringWithFormat:@"client-monitor-%d.log",getpid()]);
         return;
     }
-    // The update Agent can legitimately outlive the client. It must not
-    // block relaunch; game/client membership above is the launch boundary.
-    // A session it keeps alive from before a display change is ended, though.
+    // Steam's update service can outlive the client. A session it keeps alive from before a
+    // display change is ended.
     if(displaysChanged)endSession(engine);
-    // A legacy installation needs one fully idle session to restore Retina.
     configureRetina();
-    NSInteger width,height;NSString *source;nextResolution(&width,&height,&source,YES);
-    if([source isEqual:@"game"])event(@"display_from_game",@{@"width":@(width),@"height":@(height)});
-    else if([source isEqual:@"game_reset"])event(@"display_restored",@{@"width":@(width),@"height":@(height)});
-    NSInteger gameWidth=width,gameHeight=height;fittedResolution(&gameWidth,&gameHeight);
-    configurePreferences(width,height,gameWidth,gameHeight,NO);
-    // After the resolution: a card switch must not read as the game resetting it (gameChoice).
-    NSString *sharpness=nil;metalfx=configureMetalFX(engine,metalfx,sharpening,YES,&sharpness);
     if(gameWidth!=width || gameHeight!=height)
         event(@"display_fitted",@{@"width":@(gameWidth),@"height":@(gameHeight),@"chosen_width":@(width),@"chosen_height":@(height)});
     NSString *config=[NSString stringWithContentsOfFile:join(engine,@"config/dxmt.conf") encoding:NSUTF8StringEncoding error:nil];
     if(!config)fail(@"runtime_missing");
-    config=sharpeningProfile(canvasProfile(config,gameWidth,gameHeight),sharpness);
+    config=gamesProfile(canvasProfile(config,gameWidth,gameHeight));
     if(![config writeToFile:join(root,@"dxmt.conf") atomically:YES encoding:NSUTF8StringEncoding error:nil])fail(@"settings_write_failed");
-    NSString *pipeline=helperPath(@"ow2-pipeline");
-    if([fm isExecutableFileAtPath:pipeline]) {
-        event(@"preparing_pipelines",nil);
-        // With Game Mode the game runs as the engine's game app, which keeps its own
-        // compiled-shader cache; the helper warms that cache when it is new to this Mac.
-        NSString *gameApp=join(engine,@"lib/wine/game-mode/Overwatch.app");
-        NSArray *arguments=gameMode && [fm fileExistsAtPath:join(gameApp,@"Contents/Info.plist")] ? @[root,gameApp] : @[root];
-        int code=waitTaskTicking(task(pipeline,arguments,nil,@"pipeline-preparation.log"),600,graphicsFeed(join(join(root,@"logs"),@"pipeline-preparation.log")));
-        if(code==75)fail(@"pipeline_cache_busy");
-        if(code)event(@"pipeline_preparation_skipped",nil);
-    }
-    if(focusSession(sessionProcesses()))return;
-    // Setup applies these; a launch puts back any that went missing (the registry tool runs
-    // only then). The voice step below waits for Wine's server, as Battle.net needs.
+    makeGameApps(engine);
+    // Setup applies these; a launch puts back any that went missing. The voice step below
+    // waits for Wine's server.
     configureProxy(engine,proxyDetectionChosen());
-    if(koreanSupportChosen())configureKoreanCertificate(engine,YES,YES);
+    configureScaling(engine);
+    if(steamWindowFix(engine))[client insertObject:@"-noverifyfiles" atIndex:1];
     configureVoiceMicrophone(engine,nil,YES,YES);
     if(displays) {NSMutableDictionary *s=state();s[@"session_displays"]=displays;writeJSON(s,join(root,@"state.json"));}
-    NSDictionary *env=clientEnvironment(diagnostic?diagnosticEnvironment(engine):wineEnv(engine),large,hud,gameMode,metalfx);
-    NSTask *p=task(join(engine,@"bin/wine"),client,env,@"battlenet.log");
+    NSDictionary *env=clientEnvironment(diagnostic?diagnosticEnvironment(engine):wineEnv(engine),hud,gameMode);
+    NSTask *p=task(join(engine,@"bin/wine"),client,env,@"steam.log");
     saveStage(@"battlenet_started");event(@"battlenet_open",@{@"pid":@(p.processIdentifier)});
     task(NSProcessInfo.processInfo.arguments[0],@[@"watch",@"--root",root],nil,[NSString stringWithFormat:@"client-monitor-%d.log",getpid()]);
 }
 
-/* Settings › Advanced. Battle.net and Overwatch carry both settings from when they start,
+/* Settings › Advanced. Steam and the games carry both settings from when they start,
  * so both must be closed. The registry changes first; then the choice is saved for setup
  * and launches to keep. Without APPLY nothing changes: what would is reported. */
 static void advancedSetting(NSString *name, BOOL on, BOOL apply) {
-    BOOL korean=[name isEqual:@"korean_support"];
+    BOOL korean=NO;
     if(!apply) {
         if(korean)configureKoreanCertificate(nil,on,NO);else configureProxy(nil,on);
         return;
@@ -569,7 +523,7 @@ static void advancedSetting(NSString *name, BOOL on, BOOL apply) {
     NSMutableDictionary *s=state();s[name]=@(on);writeJSON(s,join(root,@"state.json"));
     event(@"setting_saved",@{@"name":name,@"enabled":@(on)});
 }
-// Refuses while Overwatch itself runs (failing with gameRunning). An owned
+// Refuses while a game runs (failing with gameRunning). An owned
 // Battle.net client is closed the way the launch monitor closes it (SIGTERM,
 // then wineserver -k).
 static void closeClient(NSString *gameRunning) {
@@ -588,7 +542,7 @@ static void closeClient(NSString *gameRunning) {
 }
 static void uninstall(void) {
     // Everything this app created lives under the owned root: the Wine
-    // environment holding Battle.net and Overwatch, runtimes, downloads, logs
+    // environment holding Steam and its games, runtimes, downloads, logs
     // and caches. ownRoot already refused any directory without the marker.
     closeClient(@"close_game_before_uninstall");
     // Move, never delete: the folder is recoverable from the Trash with Put
@@ -602,7 +556,7 @@ static void discardUnused(void) {
     // the empty scaffold ownRoot made (plus setup check logs). Anything else,
     // including any installation state, keeps the folder untouched.
     if([fm fileExistsAtPath:join(root,@"state.json")])fail(@"location_in_use");
-    NSSet *scaffold=[NSSet setWithArray:@[@".overwatch-2-mac-owner",@"setup.lock",@".DS_Store",@"runtimes",@"downloads",@"logs",@"home",@"tmp",@"cache"]];
+    NSSet *scaffold=[NSSet setWithArray:@[@".macvolvo-owner",@"setup.lock",@".DS_Store",@"runtimes",@"downloads",@"logs",@"home",@"tmp",@"cache"]];
     for(NSString *name in [fm contentsOfDirectoryAtPath:root error:nil]) {
         if(![scaffold containsObject:name])fail(@"location_in_use");
         struct stat st;if(lstat(join(root,name).fileSystemRepresentation,&st))fail(@"location_in_use");
@@ -619,16 +573,16 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
     @try {
         if(argc<2)fail(@"command_required");NSString *command=@(argv[1]);NSMutableDictionary *options=[NSMutableDictionary dictionary];
         for(int i=2;i<argc;i+=2) {if(i+1>=argc || strncmp(argv[i],"--",2))fail(@"invalid_arguments");options[@(argv[i]+2)]=@(argv[i+1]);}
-        NSString *defaultRoot=join([fm URLsForDirectory:NSApplicationSupportDirectory inDomains:NSUserDomainMask].firstObject.path,@"Overwatch2Mac");
+        NSString *defaultRoot=join([fm URLsForDirectory:NSApplicationSupportDirectory inDomains:NSUserDomainMask].firstObject.path,@"MacVolvo");
         monitorMode=[command isEqual:@"watch"];
         ownRoot(options[@"root"] ?: defaultRoot);
         if([command isEqual:@"preflight"])preflight();
         else if([command isEqual:@"status"]) {
-            // The resolution Overwatch opens at next on the main display.
+            // The resolution the game opens at next on the main display.
             NSInteger width,height;NSString *source;nextResolution(&width,&height,&source,NO);
             NSMutableDictionary *next=[@{@"width":@(width),@"height":@(height),@"from_game":@([source isEqual:@"game"]),@"per_display":@(displayMemory(state()))} mutableCopy];
             if(mainScreen())next[@"screen"]=mainScreen();
-            event(@"status",@{@"state":state(),@"display_next":next,@"battlenet_installed":@([fm fileExistsAtPath:clientPath()]),@"game_installed":@([fm fileExistsAtPath:join(root,@"environment/drive_c/Program Files (x86)/Overwatch/_retail_/Overwatch.exe")]),@"nexon_build":@(nexonBuild()),@"free_bytes":@(freeBytes())});
+            event(@"status",@{@"state":state(),@"display_next":next,@"battlenet_installed":@([fm fileExistsAtPath:clientPath()]),@"game_installed":@((BOOL)(installedGames().count>0)),@"games":installedGames(),@"nexon_build":@NO,@"free_bytes":@(freeBytes())});
         }
         else if([command isEqual:@"onboarded"]) { NSMutableDictionary *s=state();s[@"onboarding_complete"]=@YES;writeJSON(s,join(root,@"state.json"));event(@"onboarding_complete",nil); }
         else if([command isEqual:@"session"])event(@"session",@{@"processes":sessionProcesses()});
@@ -674,12 +628,17 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
         else if([command isEqual:@"verify"]) {verifyRuntime(runtime(),state()[@"active_runtime"]);event(@"runtime_verified",nil);}
         else if([command isEqual:@"prepare"])prepare();
         else if([command isEqual:@"install-battlenet"])installClient(options[@"installer"] ?: download(options[@"url"],options[@"sha256"]),options[@"sha256"]);
-        // --battlenet-scale 1 keeps Battle.net at Windows' size (Settings); 2 is the default.
-        // --metal-hud 1 shows Apple's Metal Performance HUD over Overwatch (Settings); off by default.
-        // --game-mode 0 starts Overwatch without macOS Game Mode (hidden app default); on by default.
-        // --metalfx 1 offers DLSS on MetalFX, with --sharpening off|low|high (Settings); off by default.
-        else if([command isEqual:@"launch"])launchClient(NO,[options[@"play"] isEqual:@"1"],![options[@"battlenet-scale"] isEqual:@"1"],[options[@"metal-hud"] isEqual:@"1"],![options[@"game-mode"] isEqual:@"0"],[options[@"metalfx"] isEqual:@"1"],options[@"sharpening"] ?: @"off");
-        else if([command isEqual:@"diagnostic-launch"])launchClient(YES,NO,![options[@"battlenet-scale"] isEqual:@"1"],[options[@"metal-hud"] isEqual:@"1"],![options[@"game-mode"] isEqual:@"0"],[options[@"metalfx"] isEqual:@"1"],options[@"sharpening"] ?: @"off");
+        // --game cs2|deadlock starts that game through Steam (portable_steam.h); without it
+        // only Steam opens. --play 1 (Recall's) means the first installed game.
+        // --fullscreen 0 starts the game in a window (Fullscreen toggle per game); on by default.
+        // --metal-hud 1 shows Apple's Metal Performance HUD over the game (Settings); off by default.
+        // --game-mode 0 starts the game without macOS Game Mode (hidden app default); on by default.
+        else if([command isEqual:@"launch"]) {
+            NSString *game=options[@"game"];
+            if(!game && [options[@"play"] isEqual:@"1"])game=installedGames().firstObject ?: @"cs2";
+            launchClient(NO,game,![options[@"fullscreen"] isEqual:@"0"],[options[@"metal-hud"] isEqual:@"1"],![options[@"game-mode"] isEqual:@"0"]);
+        }
+        else if([command isEqual:@"diagnostic-launch"])launchClient(YES,nil,YES,[options[@"metal-hud"] isEqual:@"1"],![options[@"game-mode"] isEqual:@"0"]);
         // Support and tests: what a launch with --enabled 0|1 (and --sharpening) sets up for MetalFX
         // upscaling (portable_metalfx.h); --apply 0 only reports.
         else if([command isEqual:@"metalfx"]) {

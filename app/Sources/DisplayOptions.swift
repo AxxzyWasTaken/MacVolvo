@@ -1,9 +1,9 @@
 import AppKit
 
-/// A fullscreen resolution Overwatch uses. Settings offers six (docs/candidate-parity-contract.json):
+/// A fullscreen resolution the games use. Settings offers six (docs/candidate-parity-contract.json):
 /// 1080p, 1440p and 4K, each in the shape of MacBook screens (16:10) or of monitors
-/// and TVs (16:9); the player can also choose another in Overwatch's Video settings,
-/// such as an ultrawide monitor's own size, and Recall keeps it. The window driver
+/// and TVs (16:9); the player can also choose another in the game's Video settings,
+/// such as an ultrawide monitor's own size, and MacVolvo keeps it. The window driver
 /// shows the game's image on any display, scaled to fit, without changing the
 /// display's own resolution.
 struct DisplayResolution:Hashable {
@@ -58,7 +58,7 @@ struct DisplayMode:Equatable {
     }
 }
 
-/// The main display (the one with the menu bar), where Overwatch opens.
+/// The main display (the one with the menu bar), where the game opens.
 struct MainDisplay:Equatable {
     let name:String
     let builtIn:Bool
@@ -108,11 +108,11 @@ struct MainDisplay:Equatable {
     var aspect:String { DisplayResolution.aspectName(pixels.width/max(pixels.height,1)) }
     var size:String { "\(Int(pixels.width)) × \(Int(pixels.height))" }
     /// The game's window has to fit inside the display as Wine sees it, or the pointer
-    /// can't reach all of it. The worker applies the same rule when Overwatch opens.
+    /// can't reach all of it. The worker applies the same rule when the game opens.
     func fits(_ resolution:DisplayResolution) -> Bool {
         CGFloat(resolution.width) <= points.width*2 && CGFloat(resolution.height) <= points.height*2
     }
-    /// What Overwatch uses on this display for a choice: the choice if it fits, else the
+    /// What the game uses on this display for a choice: the choice if it fits, else the
     /// largest that fits in the same shape, else the largest that fits at all.
     func fitted(_ resolution:DisplayResolution) -> DisplayResolution {
         guard !fits(resolution) else { return resolution }
@@ -124,7 +124,7 @@ struct MainDisplay:Equatable {
     func caption(for choice:DisplayResolution) -> String {
         let sharper="Larger sizes look sharper and lower your frame rate."
         if !fits(choice) {
-            return "Too large for this main display: Overwatch uses \(fitted(choice).label) until a larger display is your main display."
+            return "Too large for this main display: the game uses \(fitted(choice).label) until a larger display is your main display."
         }
         // Shapes within 2% look the same (a MacBook's area below the camera is 16:10).
         let screen=pixels.width/max(pixels.height,1)
@@ -143,12 +143,12 @@ struct MainDisplay:Equatable {
         return "Scaled up to fill your main display. \(sharper)"
     }
     /// For a monitor macOS draws at a size other than its own pixels (issue #9: a 1440p
-    /// monitor at "1920 × 1080" drawn at 3840 × 2160): what that does to Overwatch's
+    /// monitor at "1920 × 1080" drawn at 3840 × 2160): what that does to the game's
     /// picture and the Displays setting that draws it pixel for pixel; Settings shows it with
     /// a button to Display Settings. MacBook screens get
     /// none: a 13-inch MacBook Air's default is drawn about 1.15 times its screen, and
     /// changing it would resize everything else on the Mac. Changing the mode while
-    /// Overwatch runs moves Wine's pointer mapping, hence "close Overwatch".
+    /// the game runs moves Wine's pointer mapping, hence "close the game".
     var scalingNote:String? {
         guard !builtIn, let native, let sharpest else { return nil }
         let ratio=drawn.width/max(native.width,1)
@@ -161,6 +161,6 @@ struct MainDisplay:Equatable {
         let pick=sharpest.points == points ? "\(label), not the “low resolution” one" : label
         let slower=faster ? " and runs at \(hz(refresh)) instead of \(hz(sharpest.refresh))" : ""
         let rate=faster ? " at \(hz(sharpest.refresh))" : ""
-        return "macOS is resizing everything on this monitor, so Overwatch looks softer than it should\(slower). To fix it, close Overwatch and set this monitor to \(pick)\(rate)."
+        return "macOS is resizing everything on this monitor, so the game looks softer than it should\(slower). To fix it, close the game and set this monitor to \(pick)\(rate)."
     }
 }

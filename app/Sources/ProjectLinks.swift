@@ -57,18 +57,15 @@ struct RepositoryLink:View {
 
 // Loaded once, offline; progress timer updates never decode these assets again.
 private enum ProjectArtwork {
-    static let mosaic=load("MosaicLogo","png")
-    static let linkedIn=load("LinkedInMark","png")
-    static let author=load("AuthorPhoto","jpg")
     static let wordmark=load("Wordmark","png")
     static let wordmarkDark=load("WordmarkDark","png")
     private static func load(_ name:String,_ type:String)->NSImage {
         Bundle.main.url(forResource:name,withExtension:type).flatMap { NSImage(contentsOf:$0) } ?? NSImage()
     }
 }
-/// The Recall lockup (mark and name) in the owner's light- and dark-appearance
-/// versions; the mark is the square at its leading edge. A badge marks a state, as
-/// on the app icon (a failure, a paused setup, a missing drive).
+/// The MacVolvo lockup (mark and name) in its light- and dark-appearance versions; the
+/// mark is the square at its leading edge. A badge marks a state, as on the app icon
+/// (a failure, a paused setup, a missing drive).
 struct Wordmark:View {
     var height:CGFloat
     var badge:String?
@@ -90,87 +87,14 @@ struct Wordmark:View {
             .accessibilityElement().accessibilityLabel(Brand.name).accessibilityAddTraits(.isHeader)
     }
 }
-struct AuthorPhoto:View {
-    var size:CGFloat
+/// The project MacVolvo is built on, credited in About.
+struct UpstreamLink:View {
     var body:some View {
-        Image(nsImage:ProjectArtwork.author).resizable().interpolation(.high).scaledToFill()
-            .frame(width:size,height:size).clipShape(Circle())
-            .overlay { Circle().strokeBorder(.primary.opacity(0.08),lineWidth:1) }
-            .accessibilityHidden(true)
-    }
-}
-struct MosaicButton:View {
-    let placement:Brand.Placement
-    var body:some View {
-        Link(destination:Brand.mosaic(placement)) {
-            HStack(spacing:8) {
-                Text("Try").font(LauncherStyle.font(13,.semibold))
-                Image(nsImage:ProjectArtwork.mosaic).renderingMode(.original).resizable().scaledToFit()
-                    .frame(width:100,height:19).accessibilityHidden(true)
-                Image(systemName:"arrow.up.right").font(.system(size:9,weight:.semibold)).accessibilityHidden(true)
-            }.foregroundStyle(.white).padding(.horizontal,16).frame(height:38)
-                .background(.black,in:Capsule())
-                .overlay { Capsule().strokeBorder(.white.opacity(0.18),lineWidth:1) }
-                .contentShape(Capsule())
-        }.buttonStyle(.plain).environment(\.colorScheme,.light)
-            .accessibilityLabel("Try Mosaic News, free").help("Open Mosaic News in your browser. It’s free; no account needed.")
-    }
-}
-struct CoffeeButton:View {
-    @Environment(\.colorScheme) private var scheme
-    var body:some View {
-        Link(destination:Brand.koFi) {
-            HStack(spacing:7) {
-                Image(systemName:"cup.and.saucer.fill").font(.system(size:13,weight:.semibold)).foregroundStyle(LauncherStyle.accent)
-                    .accessibilityHidden(true)
-                Text("Buy me a coffee").font(LauncherStyle.font(13,.semibold))
-                Image(systemName:"arrow.up.right").font(.system(size:9,weight:.semibold)).accessibilityHidden(true)
-            }.foregroundStyle(.primary).padding(.horizontal,16).frame(height:38)
-                .background(LauncherStyle.surface(scheme),in:Capsule())
-                .overlay { Capsule().strokeBorder(.primary.opacity(0.14),lineWidth:1) }
-                .contentShape(Capsule())
-        }.buttonStyle(.plain).accessibilityLabel("Buy me a coffee on Ko-fi").help("Open Josh’s Ko-fi page in your browser")
-    }
-}
-struct LinkedInLink:View {
-    @Environment(\.colorScheme) private var scheme
-    private var blue:Color {
-        scheme == .dark ? Color(red:0.51,green:0.73,blue:0.95) : Color(red:0.11,green:0.36,blue:0.61)
-    }
-    var body:some View {
-        Link(destination:Brand.linkedIn) {
-            HStack(spacing:6) {
-                Image(nsImage:ProjectArtwork.linkedIn).renderingMode(.template).resizable().scaledToFit()
-                    .frame(width:17,height:15).accessibilityHidden(true)
-                Text("Joshua Nelson").font(LauncherStyle.font(13,.medium))
-                Image(systemName:"arrow.up.right").font(.system(size:8,weight:.medium)).accessibilityHidden(true)
-            }.foregroundStyle(blue).padding(.horizontal,10).frame(height:28)
-                .background(blue.opacity(0.10),in:Capsule()).contentShape(Capsule())
-        }.buttonStyle(.plain).accessibilityLabel("Joshua Nelson on LinkedIn")
-            .help("Open Joshua Nelson’s LinkedIn profile in your browser")
-    }
-}
-// Josh's own ask, on the home, running and loading screens once Battle.net has
-// opened for the first time. Part of the window, never a pop-up.
-struct SupportCard:View {
-    let placement:Brand.Placement
-    @Environment(\.colorScheme) private var scheme
-    var body:some View {
-        VStack(alignment:.leading,spacing:12) {
-            HStack(alignment:.top,spacing:12) {
-                AuthorPhoto(size:40)
-                Text("Hey there! I’m Josh, the creator of \(Brand.name). If you’re enjoying it and want to support my continued work, here are two ways to help :)")
-                    .font(LauncherStyle.font(13)).lineSpacing(3).fixedSize(horizontal:false,vertical:true)
-            }
-            HStack(spacing:10) {
-                MosaicButton(placement:placement)
-                CoffeeButton()
-            }
-            Text("Mosaic News is another free project of mine: a news app designed to be the most transparent, customizable, and privacy-focused way to follow the news, aggregating reporting from 850+ publishers across the political spectrum to help readers “see the whole picture.”")
-                .font(LauncherStyle.font(12)).lineSpacing(2).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
-        }.padding(16).frame(maxWidth:.infinity,alignment:.leading)
-            .background(LauncherStyle.surface(scheme),in:RoundedRectangle(cornerRadius:LauncherStyle.radius,style:.continuous))
-            .overlay { RoundedRectangle(cornerRadius:LauncherStyle.radius,style:.continuous).strokeBorder(.primary.opacity(0.06),lineWidth:1) }
-            .accessibilityElement(children:.contain).accessibilityLabel("Support \(Brand.name)")
+        Link(destination:Brand.upstream) {
+            HStack(spacing:4) {
+                Text("Based on Recall by Joshua Asher Nelson")
+                Image(systemName:"arrow.up.right").font(.system(size:8,weight:.semibold)).accessibilityHidden(true)
+            }.font(LauncherStyle.font(12,.medium))
+        }.buttonStyle(.plain).foregroundStyle(.secondary).help("Open Recall’s repository in your browser")
     }
 }

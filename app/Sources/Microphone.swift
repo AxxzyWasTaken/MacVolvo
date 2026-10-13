@@ -1,9 +1,9 @@
 import AVFoundation
 import Foundation
 
-/// Overwatch's voice chat. To macOS the game runs as part of this app, so the microphone
-/// permission is the app's. It is asked for before Battle.net opens: left to the game, Wine
-/// asks from inside Overwatch and waits for the answer, with the prompt behind a match.
+/// In-game voice chat. To macOS the game runs as part of this app, so the microphone
+/// permission is the app's. It is asked for before Steam opens: left to the game, Wine
+/// asks from inside the game and waits for the answer, with the prompt behind a match.
 /// Only the player can change it afterwards, in System Settings; Settings links there.
 enum Microphone {
     enum Access { case allowed, denied, undecided }

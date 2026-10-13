@@ -11,57 +11,49 @@ final class AppModel {
     var uninstall: UninstallState = .idle
     var update: UpdateState = .idle
     var updateNotice=""
-    // Battle.net starts Overwatch itself when asked (its own launch command).
-    static let playEnabled=false
+    /// The games MacVolvo starts through Steam (worker: launch --game, status games).
+    enum Game: String, CaseIterable, Identifiable {
+        case cs2, deadlock
+        var id:String { rawValue }
+        var title:String { self == .cs2 ? "Counter-Strike 2" : "Deadlock" }
+    }
+    /// The game Play starts; the last one chosen.
+    var selectedGame=Game(rawValue:UserDefaults.standard.string(forKey:"selectedGame") ?? "") ?? .cs2 {
+        didSet { UserDefaults.standard.set(selectedGame.rawValue,forKey:"selectedGame") }
+    }
+    /// Games that start fullscreen (worker: launch --fullscreen); each is on until turned off.
+    var windowedGames=Set(UserDefaults.standard.stringArray(forKey:"windowedGames") ?? []) {
+        didSet { UserDefaults.standard.set(windowedGames.sorted(),forKey:"windowedGames") }
+    }
+    func fullscreen(_ game:Game)->Bool { !windowedGames.contains(game.rawValue) }
+    func setFullscreen(_ game:Game,_ on:Bool) { if on { windowedGames.remove(game.rawValue) } else { windowedGames.insert(game.rawValue) } }
+    /// Games Steam has installed (worker status), in the worker's order.
+    var installedGames=[Game]()
+    /// The game this app last started; names the running game on the running screen.
+    var launchedGame: Game?
     var automaticUpdates=UserDefaults.standard.object(forKey:"automaticUpdateChecks") as? Bool ?? true {
         didSet { UserDefaults.standard.set(automaticUpdates,forKey:"automaticUpdateChecks") }
     }
-    /// Battle.net drawn at twice Windows' size, the size it has on a Mac (worker: launch
-    /// --battlenet-scale). Off by default from 1.3: at that size Battle.net's sign-in window
-    /// shows its fields only in part. Off keeps Windows' size.
-    var largeBattleNet=UserDefaults.standard.object(forKey:"largeBattleNet") as? Bool ?? false {
-        didSet { UserDefaults.standard.set(largeBattleNet,forKey:"largeBattleNet") }
+    /// Opening the app opens Steam too. Off, the player starts it with Open Steam.
+    var autoOpenSteam=UserDefaults.standard.object(forKey:"autoOpenSteam") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(autoOpenSteam,forKey:"autoOpenSteam") }
     }
-    /// Opening the app opens Battle.net too. Off, the player starts it with Open Battle.net.
-    var autoOpenBattleNet=UserDefaults.standard.object(forKey:"autoOpenBattleNet") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(autoOpenBattleNet,forKey:"autoOpenBattleNet") }
-    }
-    /// Apple's Metal Performance HUD over Overwatch (worker: launch --metal-hud). Battle.net
+    /// Apple's Metal Performance HUD over the game (worker: launch --metal-hud). Steam
     /// starts the game with its own environment, so Settings changes it only while
-    /// Battle.net is closed (see running).
+    /// Steam is closed (see running).
     var metalHUD=UserDefaults.standard.bool(forKey:"metalHUD") {
         didSet { UserDefaults.standard.set(metalHUD,forKey:"metalHUD") }
     }
-    /// MetalFX upscaling (worker: launch --metalfx, portable_metalfx.h): Overwatch offers NVIDIA
-    /// DLSS in its Video settings, and Recall runs it on Apple's MetalFX. Off by default. Like the
-    /// HUD, Battle.net carries it from when it opens.
-    var metalFXUpscaling=UserDefaults.standard.bool(forKey:"metalFXUpscaling") {
-        didSet { UserDefaults.standard.set(metalFXUpscaling,forKey:"metalFXUpscaling") }
-    }
-    /// Sharpening after MetalFX (worker: launch --sharpening; the amounts are the contract's).
-    /// Off by default; it applies only with upscaling on, and is kept while upscaling is off.
-    enum Sharpening:String, CaseIterable { case off, low, high }
-    var metalFXSharpening=Sharpening(rawValue:UserDefaults.standard.string(forKey:"metalFXSharpening") ?? "") ?? .off {
-        didSet { UserDefaults.standard.set(metalFXSharpening.rawValue,forKey:"metalFXSharpening") }
-    }
     enum Running { case client, game }
-    /// What runs now, as Settings last checked; nil when neither Battle.net nor Overwatch does.
+    /// What runs now, as Settings last checked; nil when neither Steam nor a game does.
     var running: Running?
     var firstMatchTipDismissed=UserDefaults.standard.bool(forKey:"firstMatchTipDismissed") {
         didSet { UserDefaults.standard.set(firstMatchTipDismissed,forKey:"firstMatchTipDismissed") }
     }
-    /// The Korean build of Overwatch is installed: its folder holds Nexon's anti-cheat (worker
-    /// status). The Play screens then suggest Korean account support until dismissed.
-    var nexonBuild=false
-    var koreanTipDismissed=UserDefaults.standard.bool(forKey:"koreanTipDismissed") {
-        didSet { UserDefaults.standard.set(koreanTipDismissed,forKey:"koreanTipDismissed") }
-    }
-    var showKoreanTip:Bool { nexonBuild && !koreanSupport && !koreanTipDismissed }
     /// Settings › Advanced, kept by the worker (state.json): automatic proxy detection, off
-    /// unless turned on, and Korean account support, experimental.
-    enum AdvancedSetting: String { case proxyAutoDetect="proxy_auto_detect", koreanSupport="korean_support" }
+    /// unless turned on.
+    enum AdvancedSetting: String { case proxyAutoDetect="proxy_auto_detect" }
     var proxyAutoDetect:Bool { state[AdvancedSetting.proxyAutoDetect.rawValue] as? Bool == true }
-    var koreanSupport:Bool { state[AdvancedSetting.koreanSupport.rawValue] as? Bool == true }
     /// The worker keeps these once setup has installed the game components.
     var canChangeAdvanced:Bool { isPreview || state["active_runtime"] != nil }
     /// The Settings tab shown; Settings reopens on it, as a Mac app's Settings window does.
@@ -94,21 +86,19 @@ final class AppModel {
     var graphics=GraphicsProgress()
     var release: Release?
     var root: URL
-    /// The installed Battle.net program; the worker launches the same file.
-    var battleNetExecutable:URL { root.appendingPathComponent("environment/drive_c/Program Files (x86)/Battle.net/Battle.net.exe") }
     let service: SetupService
     var state=[String:Any]()
     var canCancel=false
-    var existingName="Battle.net"
+    var existingName="Steam"
     /// Moving out of the disk image: older copies this replaces, and a copy
     /// already in Applications that is at least as new as this one.
     var moveReplaces=[String]()
     var installedCopy: AppLocation.Copy?
-    /// Battle.net has opened at least once; the support card shows from then on.
+    /// Steam has opened at least once.
     var onboarded: Bool { state["onboarding_complete"] as? Bool == true }
     var launchStarted=Date()
     private var stopLaunchWait=false
-    /// Set by the launching screen's Cancel: also close the Battle.net this launch opened.
+    /// Set by the launching screen's Cancel: also close the Steam this launch opened.
     private var closeOnStop=false
     var isPreview=false
     /// This Mac's macOS ("15.6.1"); a private preview can stand in another with --preview-macos.
@@ -117,7 +107,7 @@ final class AppModel {
     private var paused=false
     private let fm=FileManager.default
     var resources: URL { Bundle.main.resourceURL! }
-    // Advisory only: a new installation (Overwatch, Battle.net, game components
+    // Advisory only: a new installation (a game, Steam, game components
     // and update room) measures about 85 GB. Setup still proceeds below this;
     // the helper's own step checks stop a write that cannot fit.
     static let recommendedFreeBytes: UInt64=85_000_000_000
@@ -128,6 +118,8 @@ final class AppModel {
     var memoryBytes: UInt64 { ProcessInfo.processInfo.physicalMemory }
     var lowMemory: Bool { memoryBytes < Self.recommendedMemoryBytes }
     // The location can change only while nothing is installed there yet.
+    /// The running game's name: the one this app started, else the only one installed.
+    var gameName:String { launchedGame?.title ?? (installedGames.count == 1 ? installedGames[0].title : "Your game") }
     var canChangeLocation: Bool { state["active_runtime"] == nil && !clientInstalled }
     var driveName: String { InstallLocation.driveName(root) }
     private var mountObserver: NSObjectProtocol?
@@ -136,11 +128,11 @@ final class AppModel {
         case .welcome: return Brand.name
         case .moveApp: return installedCopy == nil ? "Move \(Brand.name) to Applications" : "\(Brand.name) is already installed"
         case .checking: return "Checking your Mac"
-        case .readyToInstall: return clientInstalled ? "Finish setup" : "Set up Battle.net"
-        case .preparing: return repairing ? "Repairing" : (updatingComponents ? "Updating \(Brand.name)" : "Setting up Overwatch")
-        case .launching: return "Opening Battle.net"
-        case .installer: return "Finish in Battle.net"
-        case .ready: return gameInstalled ? "Play Overwatch" : "Install Overwatch"
+        case .readyToInstall: return clientInstalled ? "Finish setup" : "Set up Steam"
+        case .preparing: return repairing ? "Repairing" : (updatingComponents ? "Updating \(Brand.name)" : "Setting up Steam")
+        case .launching: return "Opening Steam"
+        case .installer: return "Finish installing Steam"
+        case .ready: return gameInstalled ? "Ready to play" : "Install your games"
         case .running: return "\(existingName) is running"
         case .driveMissing: return "Connect \(driveName)"
         case .failure:
@@ -148,7 +140,7 @@ final class AppModel {
             case "cancelled": return "Setup paused"
             case "insufficient_disk_space": return "More space needed"
             case "rosetta_required": return "Install Rosetta"
-            case "close_installer_client": return "Close Battle.net first"
+            case "close_installer_client": return "Close Steam first"
             case "run_from_installed_app", "app_move_failed", "app_name_taken": return "Move \(Brand.name) to Applications"
             default: return "Setup needs attention"
             }
@@ -175,7 +167,7 @@ final class AppModel {
         if name == "graphics" { graphics.update(value);return }
         if name == "pipeline_preparation_skipped" { graphics.skipped() }
         // Allowlisted stage names only; never retain arbitrary error detail/paths.
-        let labels=["downloading":"Downloading Battle.net", "download_verified":"Download verified", "installing_runtime":"Installing game components", "runtime_ready":"Game components ready", "preparing_environment":"Preparing your game environment", "environment_ready":"Game environment ready", "installing_battlenet":"Opening the Battle.net installer", "preparing_pipelines":"Preparing graphics", "battlenet_started":"Opening Battle.net", "pipeline_preparation_skipped":"Opening Battle.net", "closing_client":"Closing Battle.net", "displays_changed":"Reopening Battle.net for your displays"]
+        let labels=["downloading":"Downloading Steam", "download_verified":"Download verified", "installing_runtime":"Installing game components", "runtime_ready":"Game components ready", "preparing_environment":"Preparing your game environment", "environment_ready":"Game environment ready", "installing_battlenet":"Installing Steam", "steam_installed":"Steam installed", "preparing_pipelines":"Preparing graphics", "battlenet_started":"Opening Steam", "pipeline_preparation_skipped":"Opening Steam", "closing_client":"Closing Steam", "displays_changed":"Reopening Steam for your displays"]
         if let label=labels[name] { stage=label; lastEvents.append(name); lastEvents=Array(lastEvents.suffix(12)) }
     }
     func refresh() async throws {
@@ -184,13 +176,13 @@ final class AppModel {
         state=status["state"] as? [String:Any] ?? [:]
         clientInstalled=status["battlenet_installed"] as? Bool ?? false
         gameInstalled=status["game_installed"] as? Bool ?? false
-        nexonBuild=status["nexon_build"] as? Bool ?? false
+        installedGames=(status["games"] as? [String] ?? []).compactMap(Game.init(rawValue:))
         freeBytes=(status["free_bytes"] as? NSNumber)?.uint64Value ?? 0
         // Match Finder's "available" figure, which includes purgeable storage.
         if let available=try? root.resourceValues(forKeys:[.volumeAvailableCapacityForImportantUsageKey]).volumeAvailableCapacityForImportantUsage,available>0 {
             freeBytes=max(freeBytes,UInt64(available))
         }
-        // The resolution Overwatch opens at next: the last one chosen, here or in the game.
+        // The resolution the game opens at next: the last one chosen, here or in the game.
         if let next=status["display_next"] as? [String:Any],let width=next["width"] as? Int,let height=next["height"] as? Int {
             resolution=DisplayResolution(width:width,height:height)
             rememberEachDisplay=next["per_display"] as? Bool ?? true
@@ -308,7 +300,7 @@ final class AppModel {
         } else if clientInstalled && state["prepared_runtime"] as? String == release?.runtimeVersion {
             screen = .ready
             if updated { markVersionSeen();sheet = .whatsNew;return }
-            guard autoLaunch && autoOpenBattleNet && state["onboarding_complete"] as? Bool == true else { return }
+            guard autoLaunch && autoOpenSteam && state["onboarding_complete"] as? Bool == true else { return }
             if let found=await pendingUpdate() {
                 update = .available(found);launchDeferredForUpdate=true;sheet = .update;return
             }
@@ -368,14 +360,14 @@ final class AppModel {
         installTask=Task {
             defer { busy=false;installTask=nil }
             do {
-                // The player quits Overwatch; Battle.net is closed for them.
+                // The player quits the game; Steam is closed for them.
                 if clientInstalled {
                     let processes=try await service.run("session").last?["processes"] as? [[String:Any]] ?? []
                     if processes.contains(where:{ $0["kind"] as? String == "game" }) { throw SetupFailure(code:"close_game_before_update") }
                     if !processes.isEmpty { _ = try await service.run("close-client",event:receive) }
                 }
                 update = .downloading(0)
-                let work=FileManager.default.urls(for:.cachesDirectory,in:.userDomainMask)[0].appendingPathComponent("org.overwatch2mac.launcher/update")
+                let work=FileManager.default.urls(for:.cachesDirectory,in:.userDomainMask)[0].appendingPathComponent("app.macvolvo.launcher/update")
                 try await UpdateInstaller.install(item,over:Bundle.main.bundleURL,team:team,identifier:identifier,work:work) { fraction in
                     Task { @MainActor in if case .downloading=self.update { self.update = .downloading(fraction) } }
                 }
@@ -398,8 +390,8 @@ final class AppModel {
     }
     static func updateMessage(_ code:String) -> String {
         switch code {
-        case "close_game_before_update": return "Quit Overwatch first, then choose Update Now."
-        case "client_close_failed": return "Battle.net couldn’t be closed. Quit it from the Dock, then try again."
+        case "close_game_before_update": return "Quit your game first, then choose Update Now."
+        case "client_close_failed": return "Steam couldn’t be closed. Quit it from the Dock, then try again."
         case "update_location_read_only": return "This copy of the app is in a folder you can’t change. Download the update from the release page instead."
         case "update_signature_invalid": return "The download couldn’t be verified as an official release, so nothing was changed."
         case "update_needs_newer_macos": return "This update needs a newer version of macOS, so nothing was changed."
@@ -441,12 +433,12 @@ final class AppModel {
         let panel=NSOpenPanel()
         panel.canChooseDirectories=true;panel.canChooseFiles=false;panel.canCreateDirectories=true;panel.allowsMultipleSelection=false
         panel.title="Choose Install Location";panel.prompt="Choose"
-        panel.message="Choose a drive or folder. Overwatch, Battle.net and their files go in an “\(InstallLocation.folderName)” folder inside it."
+        panel.message="Choose a drive or folder. Steam, your games and their files go in an “\(InstallLocation.folderName)” folder inside it."
         panel.directoryURL=URL(fileURLWithPath:"/Volumes")
         if panel.runModal() == .OK,let folder=panel.url { useLocation(InstallLocation.root(forChosen:folder)) }
     }
     /// Stop waiting for a disconnected drive. Nothing on it is changed; choosing
-    /// its Overwatch2Mac folder later reconnects that installation.
+    /// its MacVolvo folder later reconnects that installation.
     func useThisMac() {
         setRoot(InstallLocation.standard);notice="";recheck()
     }
@@ -454,22 +446,22 @@ final class AppModel {
         guard isPreview else { return }
         screen=value;sheet=nil;notice="";clientInstalled=true;gameInstalled=true
         busy=[.checking,.preparing,.launching].contains(value);canCancel=[.preparing,.launching].contains(value)
-        launchStarted=Date();stage=value == .launching ? "Waiting for the Battle.net window" : "Preparing your game environment"
+        launchStarted=Date();stage=value == .launching ? "Waiting for the Steam window" : "Preparing your game environment"
         failure=SetupFailure(code:"insufficient_disk_space")
         // Setup screens show the location dropdown as for a new installation.
         if value == .readyToInstall { clientInstalled=false;gameInstalled=false;freeBytes=412_000_000_000 }
         update = .upToDate
         state["onboarding_complete"]=value != .welcome && value != .readyToInstall && value != .installer
-        if value == .moveApp { moveReplaces=["Overwatch 2 Mac"] }
+        installedGames=[.cs2]
+        if value == .moveApp { moveReplaces=["MacVolvo Beta"] }
         let args=CommandLine.arguments
         if let i=args.firstIndex(of:"--preview-macos"),args.indices.contains(i+1) { macOS=args[i+1] }
-        if args.contains("--preview-korean") { nexonBuild=true;state["korean_support"]=false }
         // The launching screen's "Preparing graphics" details: preparing, done, first,
         // or the warm-up after an update (warming, warmed).
         if value == .launching,let i=args.firstIndex(of:"--preview-graphics"),args.indices.contains(i+1) { previewGraphics(args[i+1]) }
         if let i=args.firstIndex(of:"--preview-sheet"),args.indices.contains(i+1),let preview=Sheet(rawValue:args[i+1]) {
             if preview == .update {
-                update = .available(AvailableUpdate(version:"1.0.1",notes:["Fixes an issue that could stop Battle.net from opening after a Blizzard update.","Smoother first matches after installing."],page:Brand.releases,download:Brand.releases,size:242_000_000,sha256:"",checksum:nil))
+                update = .available(AvailableUpdate(version:"1.0.1",notes:["Fixes an issue that could stop Steam from opening after a Steam update.","Smoother first matches after installing."],page:Brand.releases,download:Brand.releases,size:242_000_000,sha256:"",checksum:nil))
             }
             DispatchQueue.main.async { self.sheet=preview }
         }
@@ -485,7 +477,7 @@ final class AppModel {
                 [String(format:"%012llx",UInt64.random(in:0...0xffffffffffff,using:&generator)),Double.random(in:12...140),false]
             }
             graphics.update(["phase":"pipelines","items":items])
-            if kind == "warmed" { graphics.update(["phase":"done","ready":1154,"added":0,"warmed":8168]);stage="Opening Battle.net" }
+            if kind == "warmed" { graphics.update(["phase":"done","ready":1154,"added":0,"warmed":8168]);stage="Opening Steam" }
             return
         }
         graphics.update(["phase":"preparing","target":1192])
@@ -494,7 +486,7 @@ final class AppModel {
             [String(format:"%012llx",UInt64.random(in:0...0xffffffffffff,using:&generator)),i < 1154 ? Double.random(in:0.4...3) : Double.random(in:18...140),i >= 1154]
         }
         graphics.update(["phase":"pipelines","items":items])
-        if kind == "done" { graphics.update(["phase":"done","ready":1192,"added":38]);stage="Opening Battle.net" }
+        if kind == "done" { graphics.update(["phase":"done","ready":1192,"added":38]);stage="Opening Steam" }
     }
     func installRosetta() {
         guard !isPreview else { return }
@@ -532,7 +524,7 @@ final class AppModel {
             _ = try await service.run("display",["--width",String(initial.width),"--height",String(initial.height)])
         }
         if clientInstalled { screen = .ready;return }
-        stage="Downloading Battle.net"
+        stage="Downloading Steam"
         let progress=Task { @MainActor in
             while !Task.isCancelled {
                 let file=self.root.appendingPathComponent("downloads/"+release.installerSHA256+".part")
@@ -544,20 +536,22 @@ final class AppModel {
         _ = try await service.run("download",["--url",release.installerURL,"--sha256",release.installerSHA256],event:receive)
         if paused { throw SetupFailure(code:"cancelled") }
         canCancel=false
+        // Steam's installer runs silently; the worker returns once Steam is in place.
         _ = try await service.run("install-battlenet",["--installer",root.appendingPathComponent("downloads/"+release.installerSHA256).path,"--sha256",release.installerSHA256],event:receive)
-        screen = .installer
+        try await refresh()
+        screen = clientInstalled ? .ready : .installer
     }
-    /// Closes Overwatch and Battle.net at once (wineserver -k), for a game that
+    /// Closes the game and Steam at once (wineserver -k), for a game that
     /// stopped responding. The player confirms first.
     func forceQuit() {
         perform {
             _ = try await self.service.run("stop")
             self.screen = .ready
-            self.notice="Overwatch and Battle.net were closed."
+            self.notice="The game and Steam were closed."
         }
     }
     /// Reinstalls the game components from this app and refreshes the Windows
-    /// environment. Overwatch, its settings and the Battle.net sign-in are kept.
+    /// environment. The games, their settings and the Steam sign-in are kept.
     func repair() {
         perform {
             guard let release=self.release else { throw SetupFailure(code:"release_unavailable") }
@@ -569,7 +563,7 @@ final class AppModel {
             _ = try await self.service.run("prepare",event:self.receive)
             try await self.refresh()
             self.screen = .ready
-            self.notice="Repair finished. Overwatch, its settings and your Battle.net sign-in were kept."
+            self.notice="Repair finished. Your games, their settings and your Steam sign-in were kept."
         }
     }
     var repairing=false
@@ -577,49 +571,49 @@ final class AppModel {
         perform {
             try await self.refresh()
             guard self.clientInstalled else { throw SetupFailure(code:"battlenet_not_installed") }
-            // The installer may open CEF without the required renderer flags.
+            // A Steam opened outside this app lacks its renderer settings.
             // User explicitly closes that window; normal launch never kills it.
             let sessions=try await self.service.run("session")
             if let processes=sessions.last?["processes"] as? [[String:Any]],!processes.isEmpty { throw SetupFailure(code:"close_installer_client") }
             self.screen = .ready
         }
     }
-    func openClient(play:Bool=false) async throws {
+    func openClient(game:Game?=nil) async throws {
         screen = .launching
-        // Once, before Battle.net opens: Overwatch's voice chat uses this app's permission.
+        if let game { launchedGame=game }
+        // Once, before Steam opens: in-game voice chat uses this app's permission.
         if Microphone.undecided { stage="Asking to use your microphone for voice chat";await Microphone.ask() }
         stage="Checking your running session";graphics=GraphicsProgress()
         launchStarted=Date();stopLaunchWait=false;closeOnStop=false;canCancel=true
         // Cancelling here ends the worker, and with it the graphics preparation, before
-        // Battle.net opens (the preparation keeps its finished work; the next launch resumes).
+        // Steam opens (the preparation keeps its finished work; the next launch resumes).
         let launchEvents:[[String:Any]]
         do {
             // macOS Game Mode is on unless support turned it off for a player:
-            // defaults write org.overwatch2mac.launcher gameMode -bool false
+            // defaults write app.macvolvo.launcher gameMode -bool false
             let gameMode=UserDefaults.standard.object(forKey:"gameMode") as? Bool ?? true
-            launchEvents=try await service.run("launch",(play ? ["--play","1"] : [])+["--battlenet-scale",largeBattleNet ? "2" : "1","--metal-hud",metalHUD ? "1" : "0",
-                "--metalfx",metalFXUpscaling ? "1" : "0","--sharpening",metalFXSharpening.rawValue]+(gameMode ? [] : ["--game-mode","0"]),event:receive)
+            launchEvents=try await service.run("launch",(game.map { ["--game",$0.rawValue,"--fullscreen",fullscreen($0) ? "1" : "0"] } ?? [])+["--metal-hud",metalHUD ? "1" : "0"]+(gameMode ? [] : ["--game-mode","0"]),event:receive)
         } catch {
             guard stopLaunchWait else { throw error }
-            canCancel=false;screen = .ready;notice="Cancelled. Battle.net wasn’t opened."
+            canCancel=false;screen = .ready;notice="Cancelled. Steam wasn’t opened."
             return
         }
-        // A Cancel that arrived as Battle.net was starting.
+        // A Cancel that arrived as Steam was starting.
         if stopLaunchWait { try await stopLaunch(launchEvents);return }
         // The chosen resolution is larger than this main display allows (see MainDisplay.fits).
         if let fitted=launchEvents.last(where:{ $0["stage"] as? String == "display_fitted" }),
            let width=fitted["width"] as? Int,let height=fitted["height"] as? Int {
             let chosen=(fitted["chosen_width"] as? Int).flatMap { w in (fitted["chosen_height"] as? Int).map { DisplayResolution(width:w,height:$0) } } ?? resolution
-            notice="Your main display is too small for \(chosen.label), so Overwatch uses \(width) × \(height) this time."
+            notice="Your main display is too small for \(chosen.label), so the game uses \(width) × \(height) this time."
         }
-        // Battle.net was open from before a display was connected, unplugged or rearranged.
+        // Steam was open from before a display was connected, unplugged or rearranged.
         if launchEvents.contains(where:{ $0["stage"] as? String == "displays_changed" }) {
-            notice="Your displays changed since Battle.net opened, so \(Brand.name) reopened it."
+            notice="Your displays changed since Steam opened, so \(Brand.name) reopened it."
         }
         canCancel=false
         _ = try await service.run("onboarded")
         state["onboarding_complete"]=true
-        stage="Waiting for the Battle.net window";canCancel=true
+        stage="Waiting for the Steam window";canCancel=true
         let result: LaunchReadiness.Result
         do {
             result=try await LaunchReadiness.wait(launchEvents:launchEvents,stopped:{ self.stopLaunchWait },session:{
@@ -633,11 +627,11 @@ final class AppModel {
         canCancel=false
         if result == .stopped { try await stopLaunch(launchEvents);return }
         screen = .ready
-        // The launcher stays open behind Battle.net on the running screen so
+        // The launcher stays open behind Steam on the running screen so
         // Settings, Help and About remain one click away. It never hides itself.
         switch result {
         case .existing(let name):
-            existingName=name;screen = .running
+            existingName=name == "Steam" ? name : gameName;screen = .running
             // One immediate check, never the 90-second fresh-launch wait.
             let sessions=try await service.run("session")
             let processes=sessions.last?["processes"] as? [[String:Any]] ?? []
@@ -646,48 +640,56 @@ final class AppModel {
                 NSRunningApplication(processIdentifier:pid)?.activate(options:[])
             }
         case .ready(let pid):
-            existingName="Battle.net";screen = .running
+            existingName="Steam";screen = .running
             // Do not steal focus if the player switched to another app while
             // waiting, or from a sheet they opened (the running screen says
             // where the window is).
             if sheet == nil && NSApp.isActive { NSRunningApplication(processIdentifier:pid)?.activate(options:[]) }
         case .timedOut:
-            notice="No Battle.net window was detected after 90 seconds. It may still be starting or be on another desktop. Check the Dock, or choose Open Battle.net to check again."
+            notice="No Steam window was detected after 90 seconds. It may still be starting or be on another desktop. Check the Dock, or choose Open Steam to check again."
         case .stopped: break
         }
     }
-    /// After a stopped launch: Cancel closes the Battle.net this launch opened; quitting
-    /// the app, or a Battle.net that was already open, leaves it running.
+    /// After a stopped launch: Cancel closes the Steam this launch opened; quitting
+    /// the app, or a Steam that was already open, leaves it running.
     private func stopLaunch(_ launchEvents:[[String:Any]]) async throws {
         canCancel=false
         let opened=launchEvents.contains { $0["stage"] as? String == "battlenet_open" }
         if closeOnStop && opened {
-            stage="Closing Battle.net"
+            stage="Closing Steam"
             _ = try await service.run("close-client",event:receive)
-            screen = .ready;notice="Cancelled. Battle.net was closed."
+            screen = .ready;notice="Cancelled. Steam was closed."
         } else {
             screen = .ready
-            notice="Battle.net has been left running. Select it in the Dock, or choose Open Battle.net to check its window again."
+            notice="Steam has been left running. Select it in the Dock, or choose Open Steam to check its window again."
         }
     }
     func launch() { perform { try await self.openClient() } }
-    /// Opens Battle.net (or uses the open one) and has it start Overwatch.
-    func play() { perform { try await self.openClient(play:true) } }
+    /// Opens Steam (or uses the open one) and has it start the chosen game.
+    func play() { play(selectedGame) }
+    func play(_ game:Game) { selectedGame=game;perform { try await self.openClient(game:game) } }
     func reopen() {
         guard !busy && clientInstalled && sheet == nil else { return }
         perform {
-            // A Dock click while Battle.net or Overwatch already runs shows this
+            // A Dock click while Steam or a game already runs shows this
             // window (Settings, Help, About) instead of hiding behind them.
             let sessions=try await self.service.run("session")
             let processes=sessions.last?["processes"] as? [[String:Any]] ?? []
             if !processes.isEmpty { self.showSession(processes);return }
-            guard self.autoOpenBattleNet else { return }
+            guard self.autoOpenSteam else { return }
             try await self.openClient()
         }
     }
     // Keeps the running screen accurate when the player returns to this window,
-    // for example after quitting Battle.net or starting Overwatch. No polling.
+    // for example after quitting Steam or starting a game. No polling.
+    /// The Play screen's list of installed games, read again from the worker: Steam
+    /// installs games while this app is open (on activation, and every 15 s while shown).
+    func refreshGames() {
+        guard !isPreview && !busy && screen == .ready else { return }
+        Task { try? await refresh() }
+    }
     func syncSession() {
+        refreshGames()
         guard !isPreview && !busy && screen == .running else { return }
         busy=true
         Task {
@@ -695,8 +697,8 @@ final class AppModel {
             do {
                 let sessions=try await service.run("session")
                 showSession(sessions.last?["processes"] as? [[String:Any]] ?? [])
-                // Battle.net may have installed the game meanwhile (the Korean card needs to know).
-                if !nexonBuild { try? await refresh() }
+                // Steam may have installed a game meanwhile (the Play screen lists them).
+                try? await refresh()
             } catch let error as SetupFailure where error.code == "install_location_unavailable" {
                 failure=error;screen = .driveMissing
             } catch {}
@@ -704,13 +706,13 @@ final class AppModel {
     }
     private func showSession(_ processes:[[String:Any]]) {
         guard !processes.isEmpty else { screen = .ready;return }
-        existingName=processes.contains { $0["kind"] as? String == "game" } ? "Overwatch" : "Battle.net"
+        existingName=processes.contains { $0["kind"] as? String == "game" } ? gameName : "Steam"
         screen = .running
     }
     /// Settings: what runs now. The screen answers at once; a session check confirms it
     /// unless another step is using the worker.
     func checkRunning() {
-        running = screen == .running ? (existingName == "Overwatch" ? .game : .client) : (screen == .launching ? .client : nil)
+        running = screen == .running ? (existingName == "Steam" ? .client : .game) : (screen == .launching ? .client : nil)
         guard !isPreview && clientInstalled && !busy else { return }
         busy=true
         Task {
@@ -718,13 +720,13 @@ final class AppModel {
             guard let processes=try? await service.run("session").last?["processes"] as? [[String:Any]] else { return }
             running=processes.isEmpty ? nil : (processes.contains { $0["kind"] as? String == "game" } ? .game : .client)
             if screen == .running || screen == .ready { showSession(processes) }
-            // The resolution may have changed in Overwatch since Recall last looked.
+            // The resolution may have changed in the game since this app last looked.
             try? await refresh()
         }
     }
-    /// Settings: closes Battle.net so a setting it carries can change. The worker
-    /// refuses while Overwatch runs.
-    func closeBattleNet() {
+    /// Settings: closes Steam so a setting it carries can change. The worker
+    /// refuses while a game runs.
+    func closeSteam() {
         guard !busy else { return }
         guard !isPreview else { running=nil;return }
         busy=true;notice=""
@@ -737,7 +739,7 @@ final class AppModel {
             } catch let error as SetupFailure where error.code == "close_game_before_update" {
                 running = .game
             } catch {
-                notice="Battle.net couldn’t be closed. Quit it from the Dock, then try again."
+                notice="Steam couldn’t be closed. Quit it from the Dock, then try again."
             }
         }
     }
@@ -745,7 +747,7 @@ final class AppModel {
     func cancelLaunch() { guard canCancel && screen == .launching else { return };closeOnStop=true;cancel() }
     func cancel() { guard canCancel else { return };if screen == .launching { stopLaunchWait=true;canCancel=false;service.cancel();return };paused=true;canCancel=false;stage="Pausing safely";service.cancel() }
     /// Settings saves a resolution as soon as it is chosen. The worker records it and
-    /// writes it into the game's settings, where a choice made in Overwatch's Video
+    /// writes it into the game's settings, where a choice made in the game's Video
     /// settings goes too; the latest of the two is what the next launch uses.
     func chooseResolution(_ choice:DisplayResolution) {
         guard choice != resolution else { return }
@@ -791,8 +793,8 @@ final class AppModel {
             }
         }
     }
-    /// Settings › Advanced. Battle.net carries both settings from when it opens, so Settings
-    /// offers them only while it and Overwatch are closed (see running); the worker refuses
+    /// Settings › Advanced. Steam carries the setting from when it opens, so Settings
+    /// offers it only while Steam and the games are closed (see running); the worker refuses
     /// otherwise. Before setup has made the Windows environment the worker only keeps the
     /// choice, and setup applies it.
     func setAdvanced(_ setting:AdvancedSetting, _ on:Bool) {
@@ -804,8 +806,7 @@ final class AppModel {
             busy=true;notice=""
             defer { busy=false }
             do {
-                _ = try await service.run(setting == .proxyAutoDetect ? "network" : "korean-support",
-                                          [setting == .proxyAutoDetect ? "--proxy-detect" : "--enabled",on ? "1" : "0"])
+                _ = try await service.run("network",["--proxy-detect",on ? "1" : "0"])
                 try await refresh()
             } catch {
                 state[setting.rawValue] = !on
@@ -813,11 +814,9 @@ final class AppModel {
             }
         }
     }
-    /// The Korean card's Open Settings: Settings on its Advanced tab.
-    func openAdvancedSettings() { settingsTab = .advanced;sheet = .settings }
     /// Troubleshooting's way back from a resolution that shows a black or wrong-sized
     /// picture: a new installation's resolution, with every other display setting
-    /// written again. Graphics quality and FPS are kept. Overwatch must be closed.
+    /// written again. Graphics quality and FPS are kept. The game must be closed.
     func resetDisplay() {
         let initial=DisplayResolution.initial(for:MainDisplay.current)
         guard !isPreview else { resolution=initial;notice="Display settings reset.";return }
@@ -829,7 +828,7 @@ final class AppModel {
             do {
                 _ = try await service.run("display",["--width",String(initial.width),"--height",String(initial.height)])
                 resolution=initial;displaySaved=false
-                notice="Display settings reset. Overwatch opens at \(initial.label) next time."
+                notice="Display settings reset. The game opens at \(initial.label) next time."
             } catch {
                 notice=(error as? SetupFailure ?? SetupFailure(code:"unexpected_setup_error")).message
             }
@@ -847,7 +846,7 @@ final class AppModel {
             catch { uninstall = .failed((error as? SetupFailure ?? SetupFailure(code:"unexpected_setup_error")).message);return }
             // The game folder is in the Trash. Now remove what lives outside it:
             // the single-instance lock folder, saved defaults, then the app itself.
-            let lockDirectory=fm.urls(for:.cachesDirectory,in:.userDomainMask)[0].appendingPathComponent("org.overwatch2mac.launcher")
+            let lockDirectory=fm.urls(for:.cachesDirectory,in:.userDomainMask)[0].appendingPathComponent("app.macvolvo.launcher")
             try? fm.removeItem(at:lockDirectory)
             if let id=Bundle.main.bundleIdentifier { UserDefaults.standard.removePersistentDomain(forName:id) }
             // Move to Trash, never delete; if macOS refuses, the user drags it.
@@ -862,7 +861,7 @@ final class AppModel {
         let size={ (size:CGSize) in "\(Int(size.width))x\(Int(size.height))" }
         let display:Any=MainDisplay.current.map { ["type":$0.builtIn ? "built_in" : "external","points":size($0.points),"drawn":size($0.drawn),
                                                     "native":$0.native.map(size) ?? "unknown","refresh_hz":Int($0.refresh.rounded())] } ?? "none"
-        let data:[String:Any]=["schema":1,"main_display":display,"app_version":release?.appVersion ?? "unknown","runtime_version":state["active_runtime"] as? String ?? "not_installed","macos":ProcessInfo.processInfo.operatingSystemVersionString,"memory_gib":ProcessInfo.processInfo.physicalMemory>>30,"architecture":"arm64","free_gib":freeBytes>>30,"game_installed":gameInstalled,"display_resolution":"\(resolution.width)x\(resolution.height)","metalfx_upscaling":metalFXUpscaling ? metalFXSharpening.rawValue : "off","install_location":InstallLocation.isStandard(root) ? "default" : (InstallLocation.isInternal(root) ? "other_internal" : "external"),"recent_stages":lastEvents,"last_error":failure.reportCode]
+        let data:[String:Any]=["schema":1,"main_display":display,"app_version":release?.appVersion ?? "unknown","runtime_version":state["active_runtime"] as? String ?? "not_installed","macos":ProcessInfo.processInfo.operatingSystemVersionString,"memory_gib":ProcessInfo.processInfo.physicalMemory>>30,"architecture":"arm64","free_gib":freeBytes>>30,"game_installed":gameInstalled,"games":installedGames.map(\.rawValue),"display_resolution":"\(resolution.width)x\(resolution.height)","install_location":InstallLocation.isStandard(root) ? "default" : (InstallLocation.isInternal(root) ? "other_internal" : "external"),"recent_stages":lastEvents,"last_error":failure.reportCode]
         report=String(data:(try? JSONSerialization.data(withJSONObject:data,options:[.prettyPrinted,.sortedKeys])) ?? Data(),encoding:.utf8) ?? ""
     }
     func saveReport() {

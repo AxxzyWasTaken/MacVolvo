@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// "Preparing graphics" before Battle.net opens, as the worker reports it (graphics
+/// "Preparing graphics" before Steam opens, as the worker reports it (graphics
 /// events from the pipeline helper, scripts/portable_pipeline.swift). Before each
-/// session Recall prepares the shaders Overwatch used on this Mac in earlier ones.
+/// session MacVolvo prepares the shaders the games used on this Mac in earlier ones.
 /// After an update or a macOS update it first warms the game's own shader cache
 /// with all of them, once.
 struct GraphicsProgress {
@@ -61,11 +61,11 @@ struct GraphicsProgress {
     }
     /// Why the warm-up runs, under its list.
     var warmingNote:String? {
-        phase == .warming || warmed > 0 ? "After an update, Recall builds every shader Overwatch has used on this Mac once, so your first match runs smoothly." : nil
+        phase == .warming || warmed > 0 ? "After an update, \(Brand.name) builds every shader your games have used on this Mac once, so your first match runs smoothly." : nil
     }
     /// Shown in place of the list when this preparation had nothing to do.
     var explanation:String {
-        if learned == 0 && ready == 0 { return "Recall learns each shader the first time Overwatch uses it on this Mac, then prepares it before your next session." }
+        if learned == 0 && ready == 0 { return "\(Brand.name) learns each shader the first time a game uses it on this Mac, then prepares it before your next session." }
         return "Everything learned so far was prepared earlier. Shaders new to this Mac are prepared before your next session."
     }
 }

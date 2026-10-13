@@ -9,7 +9,7 @@ import Darwin
     func applicationDidFinishLaunching(_ notification:Notification) {
         // NSWorkspace normally routes repeat opens to this process. The file lock
         // also covers explicit `open -n` and copies of the same app bundle.
-        let lockDirectory=FileManager.default.urls(for:.cachesDirectory,in:.userDomainMask)[0].appendingPathComponent("org.overwatch2mac.launcher")
+        let lockDirectory=FileManager.default.urls(for:.cachesDirectory,in:.userDomainMask)[0].appendingPathComponent("app.macvolvo.launcher")
         try? FileManager.default.createDirectory(at:lockDirectory,withIntermediateDirectories:true,attributes:[.posixPermissions:0o700])
         lockFD=open(lockDirectory.appendingPathComponent("app.lock").path,O_CREAT|O_RDWR|O_NOFOLLOW,0o600)
         if lockFD<0 || flock(lockFD,LOCK_EX|LOCK_NB) != 0 {
@@ -34,8 +34,8 @@ import Darwin
         app.addItem(.separator())
         add("Settings…",#selector(settings),",")
         app.addItem(.separator())
-        if AppModel.playEnabled { add("Play Overwatch",#selector(play),"p") }
-        add("Open Battle.net",#selector(launch),"o")
+        for game in AppModel.Game.allCases { app.addItem(playItem(game)) }
+        add("Open Steam",#selector(launch),"o")
         app.addItem(.separator())
         add("Uninstall \(Brand.name)…",#selector(uninstall))
         app.addItem(.separator())
@@ -70,21 +70,33 @@ import Darwin
     }
     func validateMenuItem(_ item:NSMenuItem)->Bool {
         // Still on the disk image: only moving to Applications, Help and About.
-        if model.screen == .moveApp,let action=item.action,[#selector(launch),#selector(forceQuit),#selector(play),#selector(settings),#selector(checkForUpdates),#selector(uninstall)].contains(action) { return false }
+        if model.screen == .moveApp,let action=item.action,[#selector(launch),#selector(forceQuit),#selector(play(_:)),#selector(settings),#selector(checkForUpdates),#selector(uninstall)].contains(action) { return false }
         if item.action == #selector(launch) || item.action == #selector(forceQuit) { return model.clientInstalled && !model.busy }
-        if item.action == #selector(play) { return model.clientInstalled && model.gameInstalled && !model.busy }
+        if item.action == #selector(play(_:)) {
+            let game=(item.representedObject as? String).flatMap(AppModel.Game.init(rawValue:))
+            return model.clientInstalled && game.map(model.installedGames.contains) == true && !model.busy
+        }
         if item.action == #selector(settings) || item.action == #selector(checkForUpdates) { return model.uninstall != .working }
         return true
     }
     // Right-clicking the Dock icon: start the game, or close a frozen one.
     func applicationDockMenu(_ sender:NSApplication)->NSMenu? {
         let menu=NSMenu()
-        for (title,action) in (AppModel.playEnabled ? [("Play Overwatch",#selector(play))] : [])+[("Open Battle.net",#selector(launch)),("Force Quit Overwatch & Battle.net…",#selector(forceQuit))] {
+        for game in AppModel.Game.allCases { menu.addItem(playItem(game)) }
+        for (title,action) in [("Open Steam",#selector(launch)),("Force Quit Game & Steam…",#selector(forceQuit))] {
             let item=NSMenuItem(title:title,action:action,keyEquivalent:"");item.target=self;menu.addItem(item)
         }
         return menu
     }
-    @objc func play() { show();model.play() }
+    /// Play <game>, in the app and Dock menus; enabled once Steam has installed it.
+    private func playItem(_ game:AppModel.Game)->NSMenuItem {
+        let item=NSMenuItem(title:"Play \(game.title)",action:#selector(play(_:)),keyEquivalent:"")
+        item.representedObject=game.rawValue;item.target=self;return item
+    }
+    @objc func play(_ sender:NSMenuItem) {
+        guard let game=(sender.representedObject as? String).flatMap(AppModel.Game.init(rawValue:)) else { return }
+        show();model.play(game)
+    }
     @objc func checkForUpdates() { show();model.checkForUpdates(manual:true) }
     @objc func whatsNew() { show();model.sheet = .whatsNew }
     @objc func releaseNotes() { NSWorkspace.shared.open(Brand.releases) }
@@ -92,7 +104,7 @@ import Darwin
     @objc func repository() { NSWorkspace.shared.open(Brand.repository) }
     @objc func forceQuit() {
         show()
-        let alert=NSAlert();alert.messageText="Force quit Overwatch and Battle.net?"
+        let alert=NSAlert();alert.messageText="Force quit your game and Steam?"
         alert.informativeText="Use this when the game stops responding. If you’re in a match, you’ll leave it."
         alert.addButton(withTitle:"Force Quit").hasDestructiveAction=true;alert.addButton(withTitle:"Cancel")
         if alert.runModal() == .alertFirstButtonReturn { model.forceQuit() }

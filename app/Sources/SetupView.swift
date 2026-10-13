@@ -21,13 +21,10 @@ struct SetupView: View {
                         details
                         VStack(spacing:12) { actions }
                         if !model.notice.isEmpty { LauncherNotice(text:model.notice) }
-                        // Below Cancel, above the support card: collapsed to one line by default.
+                        // Below Cancel: collapsed to one line by default.
                         if model.screen == .launching && model.graphics.phase != nil { GraphicsDetails(progress:model.graphics) }
                     }.frame(maxWidth:LauncherStyle.contentWidth).padding(.top,model.screen == .welcome ? 28 : 34)
                     Spacer(minLength:28)
-                    if let placement=supportPlacement {
-                        SupportCard(placement:placement).frame(maxWidth:LauncherStyle.contentWidth).padding(.bottom,20)
-                    }
                     VersionStatus(model:model).padding(.bottom,12)
                     HStack(spacing:12) {
                         FooterTile(title:"Settings",symbol:"gearshape") { model.sheet = .settings }.disabled(model.screen == .moveApp)
@@ -53,30 +50,20 @@ struct SetupView: View {
         }
         .task { model.startup() }
     }
-    /// Josh's support card, once Battle.net has opened for the first time.
-    private var supportPlacement:Brand.Placement? {
-        guard model.onboarded else { return nil }
-        switch model.screen {
-        case .ready: return .home
-        case .running: return .running
-        case .checking, .preparing, .launching: return .loading
-        default: return nil
-        }
-    }
     private var subtitle:String {
         switch model.screen {
-        case .welcome: return "Set up Battle.net, then install Overwatch."
+        case .welcome: return "Set up Steam, then install Counter-Strike 2 or Deadlock."
         case .moveApp:
             if let copy=model.installedCopy { return "Version \(copy.version) is in your Applications folder. Open it from there; this disk image is ejected for you." }
             return "\(Brand.name) runs from your Applications folder. It copies itself there, ejects this disk image and opens again."
         case .checking: return "Checking your installation and available storage."
-        case .readyToInstall: return model.clientInstalled ? "Finish preparing your installation. Your game files and sign-in will be kept." : "Install the game components, then continue in Blizzard’s installer."
+        case .readyToInstall: return model.clientInstalled ? "Finish preparing your installation. Your game files and sign-in will be kept." : "Install the game components and Steam. It takes a few minutes."
         case .preparing: return model.stage.isEmpty ? "Preparing your game environment." : model.stage
-        case .launching: return model.stage == "Opening Battle.net" ? "Waiting for its window to appear." : model.stage
-        case .installer: return "Complete setup in the Battle.net installer."
-        case .running: return model.existingName == "Overwatch" ? "Can’t find the game window? Choose Show Overwatch or check your other desktops." : "Play from the Battle.net window. Can’t find it? Choose Show Battle.net."
-        case .ready: return model.gameInstalled ? (AppModel.playEnabled ? "Battle.net opens and starts Overwatch for you." : "Open Battle.net, select Overwatch and click Play.") : "Sign in to Battle.net and install Overwatch."
-        case .driveMissing: return "Overwatch is installed on “\(model.driveName)”. Connect the drive and this app picks up where it left off."
+        case .launching: return model.stage == "Opening Steam" ? "Waiting for its window to appear." : model.stage
+        case .installer: return "Steam’s installer is finishing. Choose Continue when it’s done."
+        case .running: return model.existingName != "Steam" ? "Can’t find the game window? Choose Show Game or check your other desktops." : "Play from the Steam window. Can’t find it? Choose Show Steam."
+        case .ready: return model.gameInstalled ? "Choose a game. Steam opens and starts it for you." : "Open Steam, sign in, then install Counter-Strike 2 or Deadlock from your Library."
+        case .driveMissing: return "Your games are installed on “\(model.driveName)”. Connect the drive and this app picks up where it left off."
         case .failure: return model.failure.message
         }
     }
@@ -89,13 +76,13 @@ struct SetupView: View {
                     VStack(alignment:.leading,spacing:8) {
                         requirement("Mac", "Apple Silicon · macOS 26.5 or later")
                         requirement("Memory", "16 GB recommended")
-                        requirement("Storage", "85–95 GB free, on this Mac or an external SSD")
-                        requirement("Also", "Blizzard account, internet and Rosetta")
+                        requirement("Storage", "About 70 GB free per game, on this Mac or an external SSD")
+                        requirement("Also", "Steam account, internet and Rosetta")
                     }
                     Divider()
                     VStack(alignment:.leading,spacing:5) {
                         Text("Recommended · tested setup").font(LauncherStyle.font(13,.semibold))
-                        Text("M1 Pro with 16 GB memory. Other Apple Silicon Macs may perform differently.")
+                        Text("Tested on an M2 Max. Other Apple Silicon Macs may perform differently.")
                             .font(LauncherStyle.font(13)).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
                     }
                 }
@@ -107,7 +94,7 @@ struct SetupView: View {
                     Text(model.stage).foregroundStyle(.secondary)
                 }
             } else if model.installedCopy == nil && !model.moveReplaces.isEmpty {
-                LauncherNotice(text:"This replaces \(model.moveReplaces.joined(separator:" and ")), which moves to the Trash. Your game, settings and Battle.net sign-in are kept.")
+                LauncherNotice(text:"This replaces \(model.moveReplaces.joined(separator:" and ")), which moves to the Trash. Your games, settings and Steam sign-in are kept.")
             }
         case .checking:
             ProgressView().controlSize(.small).accessibilityLabel("Checking your Mac")
@@ -124,16 +111,15 @@ struct SetupView: View {
                 let seconds=max(0,Int(context.date.timeIntervalSince(model.launchStarted)))
                 VStack(spacing:20) {
                     HStack(spacing:12) {
-                        ProgressView().controlSize(.small).accessibilityLabel("Opening Battle.net")
+                        ProgressView().controlSize(.small).accessibilityLabel("Opening Steam")
                         Text("\(seconds / 60):\(String(format:"%02d",seconds % 60)) elapsed")
                             .font(LauncherStyle.font(14,.medium)).monospacedDigit().foregroundStyle(.secondary)
                     }
                     if seconds >= 30 {
-                        Text("Taking longer than usual. Check the Dock for a Battle.net window.")
+                        Text("Taking longer than usual. Check the Dock for a Steam window.")
                             .font(LauncherStyle.font(13)).foregroundStyle(.secondary).multilineTextAlignment(.center)
                     }
                     PerformanceTip()
-                    if model.showKoreanTip { KoreanAccountTip(open:model.openAdvancedSettings) { model.koreanTipDismissed=true } }
                     if !model.firstMatchTipDismissed { FirstMatchTip { model.firstMatchTipDismissed=true } }
                 }
             }
@@ -141,28 +127,27 @@ struct SetupView: View {
             VStack(spacing:16) {
                 if model.canChangeLocation { locationPanel }
                 if model.lowStorage { storageWarning }
-                else if !model.gameInstalled && !model.canChangeLocation { Text("A new installation needs about 85–95 GB of free space.").foregroundStyle(.secondary).font(LauncherStyle.font(13)) }
+                else if !model.gameInstalled && !model.canChangeLocation { Text("A new installation needs about 70 GB of free space per game.").foregroundStyle(.secondary).font(LauncherStyle.font(13)) }
                 if model.lowMemory && !model.gameInstalled { memoryWarning }
             }
         case .installer:
-            // Blizzard's installer opens Battle.net without this app's renderer
-            // settings, so its sign-in window can load blank until reopened here.
-            LauncherNotice(text:"When setup finishes, close any Battle.net window it opens. Then choose Continue here.\n\nIf the Battle.net sign-in window is blank or white, that’s expected at this step. Close it and choose Continue. This app reopens Battle.net with the right display settings, and you can sign in there.")
+            // Steam opened outside this app lacks its renderer settings, so its
+            // window can load blank until reopened here.
+            LauncherNotice(text:"If a Steam window opened during setup, close it. Then choose Continue here. This app reopens Steam with the right display settings, and you can sign in there.")
         case .failure:
             if model.failure.code == "rosetta_required" {
                 Text("macOS will guide you through Apple’s installation.").font(LauncherStyle.font(13)).foregroundStyle(.secondary)
             }
         case .ready:
             VStack(spacing:16) {
+                GamePicker(model:model)
                 if model.lowStorage { storageWarning }
                 PerformanceTip()
-                if model.showKoreanTip { KoreanAccountTip(open:model.openAdvancedSettings) { model.koreanTipDismissed=true } }
                 if !model.firstMatchTipDismissed { FirstMatchTip { model.firstMatchTipDismissed=true } }
             }
         case .running:
             VStack(spacing:16) {
                 PerformanceTip()
-                if model.showKoreanTip { KoreanAccountTip(open:model.openAdvancedSettings) { model.koreanTipDismissed=true } }
                 if !model.firstMatchTipDismissed { FirstMatchTip { model.firstMatchTipDismissed=true } }
             }
         case .driveMissing: EmptyView()
@@ -196,7 +181,7 @@ struct SetupView: View {
                     }.labelsHidden().pickerStyle(.menu).fixedSize().disabled(model.busy)
                         .help(model.root.path)
                 }
-                Text("Needs about 85–95 GB · \(ByteCountFormatter.string(fromByteCount:Int64(model.freeBytes),countStyle:.file)) available")
+                Text("Needs about 70 GB per game · \(ByteCountFormatter.string(fromByteCount:Int64(model.freeBytes),countStyle:.file)) available")
                     .font(LauncherStyle.font(13)).foregroundStyle(.secondary).monospacedDigit()
             }
         }
@@ -205,10 +190,10 @@ struct SetupView: View {
         let free=ByteCountFormatter.string(fromByteCount:Int64(model.freeBytes),countStyle:.file)
         let drive=InstallLocation.isStandard(model.root) ? "Your Mac has" : "“\(model.driveName)” has"
         let fix=InstallLocation.isInternal(model.root) ? "Free up space in System Settings › General › Storage" : "Free up space on the drive"
-        return LauncherNotice(text:"\(drive) \(free) free. We recommend 85–95 GB for Overwatch and its updates. You can continue, but the download may stop if storage runs out. \(fix)\(model.canChangeLocation ? ", or choose another install location." : ".")",symbol:"exclamationmark.triangle")
+        return LauncherNotice(text:"\(drive) \(free) free. We recommend about 70 GB for each game and their updates. You can continue, but the download may stop if storage runs out. \(fix)\(model.canChangeLocation ? ", or choose another install location." : ".")",symbol:"exclamationmark.triangle")
     }
     private var memoryWarning:some View {
-        LauncherNotice(text:"Your Mac has \(model.memoryBytes>>30) GB of memory. We recommend 16 GB. You can continue, but Overwatch may load slowly or stutter. Quitting other apps before you play helps.",symbol:"exclamationmark.triangle")
+        LauncherNotice(text:"Your Mac has \(model.memoryBytes>>30) GB of memory. We recommend 16 GB. You can continue, but games may load slowly or stutter. Quitting other apps before you play helps.",symbol:"exclamationmark.triangle")
     }
     private func requirement(_ title:String,_ value:String)->some View {
         HStack(alignment:.top,spacing:12) {
@@ -228,7 +213,7 @@ struct SetupView: View {
             }
             Button("Quit") { model.quit() }.buttonStyle(.borderless).disabled(model.busy)
         case .readyToInstall:
-            LauncherPrimaryAction(title:model.clientInstalled ? "Finish Setup" : "Install Battle.net",action:model.setup).keyboardShortcut(.defaultAction).disabled(model.busy)
+            LauncherPrimaryAction(title:model.clientInstalled ? "Finish Setup" : "Install Steam",action:model.setup).keyboardShortcut(.defaultAction).disabled(model.busy)
         case .checking: EmptyView()
         case .preparing:
             if model.canCancel { Button("Pause Setup",action:model.cancel).buttonStyle(.bordered).buttonBorderShape(.capsule).controlSize(.large).keyboardShortcut(.cancelAction) }
@@ -237,17 +222,18 @@ struct SetupView: View {
         case .installer:
             LauncherPrimaryAction(title:"Continue",action:model.finishInstaller).keyboardShortcut(.defaultAction).disabled(model.busy)
         case .running:
-            if model.existingName == "Battle.net" {
-                BattleNetAction(title:"Show Battle.net",executable:model.battleNetExecutable,action:model.launch).keyboardShortcut(.defaultAction).disabled(model.busy)
+            if model.existingName == "Steam" {
+                ClientAction(title:"Show Steam",action:model.launch).keyboardShortcut(.defaultAction).disabled(model.busy)
             } else {
-                LauncherPrimaryAction(title:"Show \(model.existingName)",action:model.launch).keyboardShortcut(.defaultAction).disabled(model.busy)
+                LauncherPrimaryAction(title:"Show Game",action:model.launch).keyboardShortcut(.defaultAction).disabled(model.busy)
             }
         case .ready:
-            if AppModel.playEnabled && model.gameInstalled {
-                LauncherPrimaryAction(title:"Play Overwatch",action:model.play).keyboardShortcut(.defaultAction).disabled(model.busy)
-                Button("Open Battle.net",action:model.launch).buttonStyle(.borderless).disabled(model.busy)
+            if model.installedGames.contains(model.selectedGame) {
+                LauncherPrimaryAction(title:"Play \(model.selectedGame.title)",action:model.play).keyboardShortcut(.defaultAction).disabled(model.busy)
+                // Steam on its own: the store, library, friends, settings.
+                ClientAction(title:"Open Steam",secondary:true,action:model.launch).disabled(model.busy)
             } else {
-                BattleNetAction(title:"Open Battle.net",executable:model.battleNetExecutable,action:model.launch).keyboardShortcut(.defaultAction).disabled(model.busy)
+                ClientAction(title:"Open Steam",action:model.launch).keyboardShortcut(.defaultAction).disabled(model.busy)
             }
         case .driveMissing:
             LauncherPrimaryAction(title:"Try Again",action:model.recheck).keyboardShortcut(.defaultAction).disabled(model.busy)
@@ -297,7 +283,7 @@ struct VersionStatus: View {
         }.font(LauncherStyle.font(12)).foregroundStyle(.secondary)
     }
 }
-// Every launch: other apps compete with Overwatch for the GPU, CPU and memory; players
+// Every launch: other apps compete with the game for the GPU, CPU and memory; players
 // who kept theirs open reported stutters.
 struct PerformanceTip: View {
     var body:some View {
@@ -306,29 +292,15 @@ struct PerformanceTip: View {
             .fixedSize(horizontal:false,vertical:true)
     }
 }
-// Shown until dismissed on the Play, opening and running screens, from the first
-// session (while Overwatch downloads): first matches compile the game's shaders on
-// this Mac.
+// Shown until dismissed on the Play, opening and running screens: first matches
+// compile the game's shaders on this Mac.
 struct FirstMatchTip: View {
-    /// A community custom game that shows Overwatch's effects in a few minutes, so
-    /// the Mac builds their shaders before a real match.
-    static let workshopCode="929PJ"
     let dismiss:()->Void
-    @State private var copied=false
     var body:some View {
         HStack(alignment:.top,spacing:10) {
             Label {
-                VStack(alignment:.leading,spacing:10) {
-                    Text("Your first matches can stutter briefly while your Mac prepares Overwatch’s graphics. To get ahead of it, play Workshop code \(Self.workshopCode) once from Custom Games before you queue.")
-                        .lineSpacing(3).fixedSize(horizontal:false,vertical:true)
-                    HStack(spacing:10) {
-                        Button(copied ? "Copied" : "Copy Code") {
-                            NSPasteboard.general.clearContents();NSPasteboard.general.setString(Self.workshopCode,forType:.string);copied=true
-                        }.buttonStyle(.bordered).buttonBorderShape(.capsule).controlSize(.small)
-                            .accessibilityLabel(copied ? "Copied" : "Copy Workshop code \(Self.workshopCode)")
-                        Text("Shader warm-up by u/Working_Dealer_5102").font(LauncherStyle.font(12)).foregroundStyle(.tertiary)
-                    }
-                }
+                Text("Your first matches can stutter briefly while your Mac prepares the game’s graphics. It smooths out as you play, and the prepared graphics are kept for next time.")
+                    .lineSpacing(3).fixedSize(horizontal:false,vertical:true)
             } icon: { Image(systemName:"sparkles") }
             Spacer(minLength:0)
             Button(action:dismiss) { Image(systemName:"xmark").font(.system(size:11,weight:.bold)).frame(width:22,height:22).contentShape(Rectangle()) }
@@ -336,33 +308,46 @@ struct FirstMatchTip: View {
         }.font(LauncherStyle.font(13)).foregroundStyle(.secondary)
             .padding(16).frame(maxWidth:.infinity,alignment:.leading)
             .background(LauncherStyle.accent.opacity(0.09),in:RoundedRectangle(cornerRadius:16,style:.continuous))
-            .task(id:copied) { if copied { try? await Task.sleep(for:.seconds(2));copied=false } }
     }
 }
-// Korean accounts linked to Nexon need Korean account support (Settings › Advanced). Shown
-// on the Play, opening and running screens once the game folder holds Nexon's files and the
-// option is off, until dismissed; the option itself stays in Settings either way. In English
-// and Korean, since Recall is otherwise English-only.
-struct KoreanAccountTip: View {
-    let open:()->Void
-    let dismiss:()->Void
+// The Play screen's choice of game, remembered (AppModel.selectedGame). Each tile says
+// whether Steam has installed it; one that isn't says how to get it.
+struct GamePicker: View {
+    @Bindable var model:AppModel
+    @Environment(\.colorScheme) private var scheme
+    private let tick=Timer.publish(every:15,on:.main,in:.common).autoconnect()
     var body:some View {
-        HStack(alignment:.top,spacing:10) {
-            Label {
-                VStack(alignment:.leading,spacing:10) {
-                    Text("Playing on a Korean account linked to Nexon? Turn on Korean account support in Settings › Advanced.")
-                        .lineSpacing(3).fixedSize(horizontal:false,vertical:true)
-                    Text("넥슨과 연동된 한국 계정으로 플레이하시나요? 설정 › 고급에서 한국 계정 지원을 켜세요.")
-                        .lineSpacing(3).fixedSize(horizontal:false,vertical:true)
-                    Button("Open Settings 설정 열기",action:open).buttonStyle(.bordered).buttonBorderShape(.capsule).controlSize(.small)
+        VStack(spacing:12) {
+            HStack(spacing:10) {
+                ForEach(AppModel.Game.allCases) { game in
+                    VStack(alignment:.leading,spacing:8) {
+                        tile(game)
+                        // Steam's own Play button skips this; start games here.
+                        Toggle("Fullscreen",isOn:Binding(get:{ model.fullscreen(game) },set:{ model.setFullscreen(game,$0) }))
+                            .toggleStyle(.switch).controlSize(.small).font(LauncherStyle.font(12)).padding(.leading,4)
+                            .disabled(model.busy).accessibilityLabel("\(game.title) fullscreen")
+                    }
                 }
-            } icon: { Image(systemName:"person.crop.circle.badge.questionmark") }
-            Spacer(minLength:0)
-            Button(action:dismiss) { Image(systemName:"xmark").font(.system(size:11,weight:.bold)).frame(width:22,height:22).contentShape(Rectangle()) }
-                .buttonStyle(.borderless).foregroundStyle(.secondary).help("Dismiss this tip").accessibilityLabel("Dismiss tip")
-        }.font(LauncherStyle.font(13)).foregroundStyle(.secondary)
-            .padding(16).frame(maxWidth:.infinity,alignment:.leading)
-            .background(LauncherStyle.accent.opacity(0.09),in:RoundedRectangle(cornerRadius:16,style:.continuous))
+            }
+            if !model.installedGames.contains(model.selectedGame) {
+                LauncherNotice(text:"\(model.selectedGame.title) isn’t installed yet. Open Steam, find it in your Library (or the Store) and click Install. It appears here once it’s installed.",symbol:"arrow.down.circle")
+            }
+        }.onReceive(tick) { _ in model.refreshGames() }
+    }
+    private func tile(_ game:AppModel.Game) -> some View {
+        let selected=model.selectedGame == game, installed=model.installedGames.contains(game)
+        let shape=RoundedRectangle(cornerRadius:16,style:.continuous)
+        return Button { model.selectedGame=game } label: {
+            VStack(alignment:.leading,spacing:4) {
+                Text(game.title).font(LauncherStyle.font(14,.semibold)).foregroundStyle(.primary).lineLimit(1)
+                Label(installed ? "Installed" : "Not installed",systemImage:installed ? "checkmark.circle.fill" : "circle.dashed")
+                    .font(LauncherStyle.font(12)).foregroundStyle(.secondary)
+            }.padding(14).frame(maxWidth:.infinity,alignment:.leading)
+                .background(LauncherStyle.surface(scheme),in:shape)
+                .overlay { shape.strokeBorder(selected ? AnyShapeStyle(LauncherStyle.accent) : AnyShapeStyle(.primary.opacity(0.08)),lineWidth:selected ? 2 : 1) }
+                .contentShape(shape)
+        }.buttonStyle(.plain).disabled(model.busy)
+            .accessibilityLabel("\(game.title), \(installed ? "installed" : "not installed")").accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 // The footer's three destinations, sized as buttons.

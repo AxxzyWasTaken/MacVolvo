@@ -1,7 +1,7 @@
 import AppKit
 import Darwin
 
-// Recall runs from an Applications folder. Opened from its disk image, or from a
+// MacVolvo runs from an Applications folder. Opened from its disk image, or from a
 // download macOS runs in a temporary read-only location (App Translocation), it
 // copies itself there, verified like an update, and reopens. Older copies of the
 // same app, such as the one installed under its former name, are moved to the

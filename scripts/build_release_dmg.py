@@ -17,7 +17,7 @@ import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-APP_NAME = 'Recall'
+APP_NAME = 'MacVolvo'
 # Finder window content size and icon centers, in points from the top left.
 # The background is drawn 40 points taller than the content so a taller title
 # bar never uncovers Finder's default white.
@@ -62,7 +62,7 @@ def main():
     p.add_argument('--app', type=Path, required=True)
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--identity', required=True, help='Developer ID Application identity')
-    p.add_argument('--notary-profile', default='overwatch-2-mac-notary')
+    p.add_argument('--notary-profile', default='macvolvo-notary')
     p.add_argument('--volume-name', default=APP_NAME)
     p.add_argument('--plain', action='store_true', help='no window layout (test images)')
     p.add_argument('--skip-notarize', action='store_true')

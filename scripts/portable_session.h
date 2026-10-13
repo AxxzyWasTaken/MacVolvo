@@ -19,7 +19,7 @@ static NSArray *sessionProcesses(void) {
     for(NSString *line in [table componentsSeparatedByString:@"\n"]) {
         NSTextCheckingResult *m=[rx firstMatchInString:line options:0 range:NSMakeRange(0,line.length)];if(!m)continue;
         NSString *name=[line substringWithRange:[m rangeAtIndex:3]];
-        BOOL game=[name hasSuffix:@"Overwatch.exe"],client=[name hasSuffix:@"\\Battle.net.exe"];
+        BOOL game=isGameProcess(name),client=[name.lowercaseString hasSuffix:@"\\steam.exe"];
         if(!game && !client)continue;
         NSString *pid=[line substringWithRange:[m rangeAtIndex:1]],*start=[line substringWithRange:[m rangeAtIndex:2]];
         NSString *identity=[NSString stringWithFormat:@"%@|%@",pid,start];

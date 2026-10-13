@@ -82,33 +82,19 @@ struct LauncherPrimaryAction: View {
             .buttonStyle(LauncherActionStyle())
     }
 }
-/// "Open Battle.net" in Battle.net's own blue, with its icon, so it is clear where it leads.
-/// The icon comes from the player's installed Battle.net.exe (BattleNetIcon); until it has
-/// loaded, or if it cannot be read, the button shows the title alone.
-struct BattleNetAction: View {
-    static let blue=Color(red:0,green:0.455,blue:0.878)  // #0074E0, white text 4.6:1
+/// "Open Steam": the hero action with a neutral game-controller symbol, so it reads as
+/// the way to the games without borrowing Valve's artwork.
+struct ClientAction: View {
     let title:String
-    let executable:URL
+    var secondary=false
     let action:()->Void
-    @State private var icon:NSImage?
     var body:some View {
         Button(action:action) {
             HStack(spacing:9) {
-                if let icon {
-                    Image(nsImage:icon).resizable().interpolation(.high).frame(width:22,height:22)
-                        .padding(1.5).background(Circle().fill(.white)).accessibilityHidden(true)
-                }
+                Image(systemName:"gamecontroller.fill").font(.system(size:15,weight:.semibold)).accessibilityHidden(true)
                 Text(title).font(LauncherStyle.font(15,.semibold))
             }
-        }.buttonStyle(LauncherActionStyle(fill:Self.blue,text:.white))
-        .task(id:executable) { icon=await Self.cachedIcon(executable) }
-    }
-    @MainActor private static var cache:[URL:NSImage]=[:]
-    @MainActor private static func cachedIcon(_ url:URL) async -> NSImage? {
-        if let hit=cache[url] { return hit }
-        let image=await Task.detached(priority:.utility) { BattleNetIcon.load(from:url) }.value
-        if let image { cache[url]=image }
-        return image
+        }.buttonStyle(secondary ? LauncherActionStyle(fill:Color.primary.opacity(0.1),text:.primary) : LauncherActionStyle())
     }
 }
 /// Stops what the launcher is doing (the launching screen's Cancel).

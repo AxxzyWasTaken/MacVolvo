@@ -13,7 +13,7 @@ import CoreGraphics
                 launchEvents:[["stage":"session_existing","kind":kind,"activated":false]],
                 stopped:{false},session:{fatalError("Existing session entered fresh-launch polling")},
                 windows:{fatalError("Existing session waited for a visible window")})
-            precondition(existing == .existing(kind == "game" ? "Overwatch" : "Battle.net"))
+            precondition(existing == .existing(kind == "game" ? "game" : "Steam"))
         }
         var ticks=0
         // A process exists immediately; another installation's window and a

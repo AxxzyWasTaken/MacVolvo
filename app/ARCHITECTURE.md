@@ -1,5 +1,34 @@
 # Native app sources
 
+## MacVolvo (read first)
+
+MacVolvo is Recall ported from Battle.net and Overwatch to Steam, Counter-Strike 2 and
+Deadlock. The rest of this file describes Recall and still holds for everything not listed
+here.
+
+- Identity: `Brand.swift` (name, repository haeli05/MacVolvo, upstream link), bundle
+  identifier `app.macvolvo.launcher`, data folder `~/Library/Application Support/MacVolvo`,
+  ownership marker `.macvolvo-owner` (`macvolvo-native-v01`). Nothing is shared with Recall.
+- Runtime: Recall 1.3.0's `runtime.tar.gz` unchanged (`release.json`). The installer is
+  Steam's `SteamSetup.exe`, pinned by SHA-256.
+- Worker (`scripts/portable_setup.m`): Steam-specific code is in `scripts/portable_steam.h`
+  (game table: `cs2`/730/`cs2.exe`, `deadlock`/1422450/`deadlock.exe`; Steam window fix;
+  per-game Game Mode bundles; per-game DXMT profile). `launch --game cs2|deadlock` starts a
+  game through Steam (`-applaunch`, `-fullscreen -w -h`, `-nojoy`); without `--game` only
+  Steam opens. `status` reports installed `games`. Protocol names that say "battlenet"
+  (stages, events, `install-battlenet`) are kept so the app's state machine carries over;
+  they mean Steam. Overwatch-only parts are dormant: its settings file
+  (`portable_preferences.h` reads and writes none), the shader pipeline helper (not built),
+  MetalFX and Korean support (headers kept for the support commands).
+- Steam's window on Wine 11: Steam's browser draws black with its GPU off. The worker turns
+  GPU web views on (`GPUAccelWebViewsV3`) and puts `Resources/steamwebhelper.exe`
+  (`scripts/webhelper_wrapper.c`, built with llvm-mingw) in place of Steam's helper, which
+  runs the real one with `--in-process-gpu --use-angle=vulkan`; Steam then starts with
+  `-noverifyfiles` so it keeps the stand-in. `docs/HANDOFF.md` has the investigation.
+
+## Recall
+
+
 The app is named Recall. `Brand.swift` holds its public identity in one place:
 name, tagline, repository links, the update feed, the release disk image name,
 the trademark line and the author's links (Mosaic News links say which screen

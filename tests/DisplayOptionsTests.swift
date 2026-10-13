@@ -1,7 +1,7 @@
 import Foundation
 
 // The fullscreen resolutions and the main-display rules Settings shows: shapes,
-// sizes, which choices fit a display as Wine sees it, and what Overwatch uses when
+// sizes, which choices fit a display as Wine sees it, and what the game uses when
 // a choice is too large. The worker applies the same fit rule at launch
 // (portable_preferences.h). Run from the repository root to also check the list
 // against docs/candidate-parity-contract.json.
@@ -49,7 +49,7 @@ import Foundation
         // A new installation, and Troubleshooting's reset: 1080p in the main display's shape.
         precondition(DisplayResolution.initial(for:macBook) == r(1920,1200) && DisplayResolution.initial(for:monitor) == r(1920,1080))
         precondition(DisplayResolution.initial(for:wide) == r(1920,1080) && DisplayResolution.initial(for:nil) == r(1920,1200))
-        // Sizes chosen in Overwatch's Video settings: named, fitted and described like Settings' own.
+        // Sizes chosen in the game's Video settings: named, fitted and described like Settings' own.
         precondition(r(5120,2160).aspect == "21:9" && r(3440,1440).aspect == "21:9" && r(5120,1440).aspect == "32:9" && r(5120,2880).aspect == "16:9")
         // A player's 21:9 5K2K monitor ("looks like 2560 x 1080"): its own size fits and matches.
         let ultrawide=MainDisplay(name:"LG 5K2K",builtIn:false,points:CGSize(width:2560,height:1080),pixels:CGSize(width:5120,height:2160))
@@ -63,11 +63,11 @@ import Foundation
         // Settings' sizes keep their wording.
         precondition(monitor.caption(for:r(1920,1200)).hasPrefix("Your main display is wider than 16:10, so the picture has black bars at the sides."))
         precondition(macBook.caption(for:r(1920,1080)).hasPrefix("Your main display is taller than 16:9, so the picture has black bars above and below."))
-        precondition(macBook.caption(for:r(3840,2400)).hasPrefix("Too large for this main display: Overwatch uses 2560 × 1600"))
+        precondition(macBook.caption(for:r(3840,2400)).hasPrefix("Too large for this main display: the game uses 2560 × 1600"))
         precondition(macBook.caption(for:r(1920,1200)).hasPrefix("Scaled up to fill your main display."))
         precondition(monitor.caption(for:r(2560,1440)).hasPrefix("Matches your main display exactly"))
         precondition(monitor.caption(for:r(3840,2160)).hasPrefix("Larger than your main display"))
-        // A 5K display at its default 2x: Overwatch lists 5120 x 2880.
+        // A 5K display at its default 2x: the game lists 5120 x 2880.
         let fiveK=MainDisplay(name:"Studio Display",builtIn:false,points:CGSize(width:2560,height:1440),pixels:CGSize(width:5120,height:2880))
         precondition(fiveK.fits(r(5120,2880)) && fiveK.caption(for:r(5120,2880)).hasPrefix("Matches your main display exactly"))
 
@@ -87,7 +87,7 @@ import Foundation
         // The player's setup: "1920 x 1080" drawn at 3840 x 2160 and shrunk to the 1440p screen.
         let scaled=MainDisplay(name:"LG ULTRAGEAR",builtIn:false,points:CGSize(width:1920,height:1080),scale:2,refresh:50,modes:lgModes)
         precondition(scaled.drawn == CGSize(width:3840,height:2160) && scaled.pixels == CGSize(width:2560,height:1440) && scaled.size == "2560 × 1440")
-        precondition(plain(scaled.scalingNote) == "macOS is resizing everything on this monitor, so Overwatch looks softer than it should and runs at 50 Hz instead of 144 Hz. To fix it, close Overwatch and set this monitor to 2560 × 1440 at 144 Hz.")
+        precondition(plain(scaled.scalingNote) == "macOS is resizing everything on this monitor, so the game looks softer than it should and runs at 50 Hz instead of 144 Hz. To fix it, close the game and set this monitor to 2560 × 1440 at 144 Hz.")
         precondition(scaled.scalingNote!.contains("2560\u{00A0}×\u{00A0}1440 at 144\u{00A0}Hz."))
         // Settings no longer calls 3840 x 2160 an exact match there, and the fit rule is unchanged.
         precondition(scaled.caption(for:r(2560,1440)).hasPrefix("Matches your main display exactly"))
@@ -95,13 +95,13 @@ import Foundation
         precondition(scaled.fits(r(3840,2160)) && !scaled.fits(r(3840,2400)))
         // 1920 x 1080 at 1x on the same monitor: drawn smaller and stretched.
         let low=MainDisplay(name:"LG ULTRAGEAR",builtIn:false,points:CGSize(width:1920,height:1080),scale:1,refresh:144,modes:lgModes)
-        precondition(plain(low.scalingNote) == "macOS is resizing everything on this monitor, so Overwatch looks softer than it should. To fix it, close Overwatch and set this monitor to 2560 × 1440.")
+        precondition(plain(low.scalingNote) == "macOS is resizing everything on this monitor, so the game looks softer than it should. To fix it, close the game and set this monitor to 2560 × 1440.")
         // The sharp 1280 x 720 twin is drawn at the screen's pixels: no note.
         precondition(MainDisplay(name:"LG",builtIn:false,points:CGSize(width:1280,height:720),scale:2,refresh:144,modes:lgModes).scalingNote == nil)
         // A 4K monitor at "2560 x 1440" (drawn at 5120 x 2880): its sharp choice is 1920 x 1080.
         let uhdModes=[60.0].flatMap { [m(3840,2160,3840,2160,$0,native:true),m(1920,1080,3840,2160,$0,native:true),m(2560,1440,5120,2880,$0),m(1920,1080,1920,1080,$0)] }
         let uhdScaled=MainDisplay(name:"4K",builtIn:false,points:CGSize(width:2560,height:1440),scale:2,refresh:60,modes:uhdModes)
-        precondition(plain(uhdScaled.scalingNote) == "macOS is resizing everything on this monitor, so Overwatch looks softer than it should. To fix it, close Overwatch and set this monitor to 1920 × 1080.")
+        precondition(plain(uhdScaled.scalingNote) == "macOS is resizing everything on this monitor, so the game looks softer than it should. To fix it, close the game and set this monitor to 1920 × 1080.")
         precondition(MainDisplay(name:"4K",builtIn:false,points:CGSize(width:1920,height:1080),scale:2,refresh:60,modes:uhdModes).scalingNote == nil)
         // A 4K TV at 1920 x 1080 1x: the sharp choice has the same name.
         let tv=MainDisplay(name:"TV",builtIn:false,points:CGSize(width:1920,height:1080),scale:1,refresh:60,modes:uhdModes)

@@ -2,6 +2,9 @@
  * defaults once; explicit restore-candidate also restores the v6 graphics/FPS.
  * Never changes sensitivity, bindings or other sections. */
 static NSArray *settingsFiles(void) {
+    // MacVolvo: the games take their size from Steam's launch options (portable_steam.h),
+    // not from a settings file; Overwatch's is never read or written.
+    if((1))return @[];
     NSString *users=join(root,@"environment/drive_c/users");NSMutableArray *found=[NSMutableArray array];
     for(NSString *user in [fm contentsOfDirectoryAtPath:users error:nil]) {
         NSString *p=join(join(users,user),@"Documents/Overwatch/Settings/Settings_v0.ini");
@@ -165,7 +168,7 @@ static void configurePreferences(NSInteger width, NSInteger height, NSInteger ga
             NSString *directory=join(users,name);struct stat st;
             if(!lstat(directory.fileSystemRepresentation,&st) && S_ISDIR(st.st_mode))[profiles addObject:directory];
         }
-        if(profiles.count==1) {
+        if((0) && profiles.count==1) {
             path=join(profiles.firstObject,@"Documents/Overwatch/Settings/Settings_v0.ini");
             if(![[path stringByResolvingSymlinksInPath] hasPrefix:[root stringByAppendingString:@"/"]])fail(@"settings_outside_installation");
             mkdirs(path.stringByDeletingLastPathComponent);
@@ -237,7 +240,7 @@ static void configurePreferences(NSInteger width, NSInteger height, NSInteger ga
         }
     }
     writeJSON(s,join(root,@"state.json"));
-    event(@"display_saved",@{@"width":@(width),@"height":@(height),@"pending_first_game":@(!path)});
+    event(@"display_saved",@{@"width":@(width),@"height":@(height),@"pending_first_game":@((BOOL)!path)});
 }
 static void configureDisplay(NSInteger width, NSInteger height) {configurePreferences(width,height,width,height,NO);}
 /* The game's window must fit inside the main display as Wine sees it (twice its size in

@@ -7,7 +7,7 @@ import Foundation
 // a different app of the same name and clears the download quarantine. Never
 // point it at /Applications.
 @main struct AppLocationTests {
-    static let identifier="org.overwatch2mac.launcher"
+    static let identifier="app.macvolvo.launcher"
     static func fakeApp(_ url:URL, identifier:String=identifier, version:String, build:Int) throws {
         try FileManager.default.createDirectory(at:url.appendingPathComponent("Contents"),withIntermediateDirectories:true)
         let info:NSDictionary=["CFBundleIdentifier":identifier,"CFBundleShortVersionString":version,"CFBundleVersion":String(build)]

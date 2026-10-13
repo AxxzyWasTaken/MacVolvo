@@ -1,7 +1,7 @@
 import Foundation
 import CoreGraphics
 
-// Window existence is a handoff signal, not proof that Blizzard has finished
+// Window existence is a handoff signal, not proof that Steam has finished
 // loading its web content. Only geometry and exact owned-process IDs are used.
 // No window titles, screenshots, Accessibility or Screen Recording permission.
 enum LaunchReadiness {
@@ -40,7 +40,7 @@ enum LaunchReadiness {
         // the scoped worker. A minimized/other-desktop window must not send a
         // reopen through the fresh-launch timeout again.
         if let existing=launchEvents.last(where:{$0["stage"] as? String == "session_existing"}) {
-            return .existing(existing["kind"] as? String == "game" ? "Overwatch" : "Battle.net")
+            return .existing(existing["kind"] as? String == "game" ? "game" : "Steam")
         }
         let clock=ContinuousClock(), deadline=clock.now.advanced(by:timeout)
         var previous: Int32?
