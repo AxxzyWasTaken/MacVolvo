@@ -1,21 +1,33 @@
 import SwiftUI
 import AppKit
 
-// Shared visual vocabulary. The system font (SF Pro) needs no bundled font or
-// download and matches the menus, sheets and alerts macOS draws.
+// Shared visual vocabulary. Headings, buttons and labels (semibold and up, or 17 pt
+// and up) are set in Chakra Petch, bundled under SIL OFL 1.1 (Resources/Fonts); smaller
+// regular text stays in the system font, which reads best at body sizes.
 enum LauncherStyle {
-    static let accent=Color(red:1,green:0.62,blue:0.10)
-    static let ink=Color(red:0.15,green:0.13,blue:0.10)
+    static let accent=Color(red:1,green:0.42,blue:0.08)
+    static let ink=Color(red:0.06,green:0.06,blue:0.07)
     static let contentWidth:CGFloat=440
-    static let radius:CGFloat=22
+    static let radius:CGFloat=12
+    private static let displayFonts:Bool={
+        guard let folder=Bundle.main.resourceURL?.appendingPathComponent("Fonts"),
+              let files=try? FileManager.default.contentsOfDirectory(at:folder,includingPropertiesForKeys:nil) else { return false }
+        for file in files where file.pathExtension == "ttf" { CTFontManagerRegisterFontsForURL(file as CFURL,.process,nil) }
+        return NSFont(name:"ChakraPetch-SemiBold",size:12) != nil
+    }()
     static func font(_ size:CGFloat, _ weight:Font.Weight = .regular) -> Font {
-        .system(size:size,weight:weight)
+        let display=weight == .semibold || weight == .bold || weight == .heavy || weight == .black || size >= 17
+        guard display && displayFonts else { return .system(size:size,weight:weight) }
+        let face=weight == .bold || weight == .heavy || weight == .black ? "ChakraPetch-Bold"
+            : weight == .semibold ? "ChakraPetch-SemiBold" : "ChakraPetch-Medium"
+        // Chakra Petch runs small next to SF Pro at the same point size.
+        return .custom(face,fixedSize:size*1.08)
     }
     static func ground(_ scheme:ColorScheme) -> Color {
-        scheme == .dark ? Color(red:0.09,green:0.095,blue:0.105) : Color(red:0.975,green:0.970,blue:0.958)
+        scheme == .dark ? Color(red:0.055,green:0.06,blue:0.07) : Color(red:0.955,green:0.955,blue:0.95)
     }
     static func surface(_ scheme:ColorScheme) -> Color {
-        scheme == .dark ? Color(red:0.14,green:0.145,blue:0.16) : .white
+        scheme == .dark ? Color(red:0.105,green:0.11,blue:0.125) : .white
     }
 }
 struct LauncherBackground: View {

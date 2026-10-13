@@ -11,11 +11,14 @@ struct SetupView: View {
                     VStack(spacing:24) {
                         if model.screen == .welcome {
                             VStack(spacing:18) {
-                                Wordmark(height:84)
+                                VStack(spacing:6) { Wordmark(height:84);AuthorLink() }
                                 Text(subtitle).font(LauncherStyle.font(16)).foregroundStyle(.secondary).multilineTextAlignment(.center)
                             }
                         } else {
-                            Wordmark(height:84,badge:model.screen == .failure ? (model.failure.code == "cancelled" ? "pause.fill" : "exclamationmark") : (model.screen == .driveMissing ? "externaldrive" : nil))
+                            VStack(spacing:6) {
+                                Wordmark(height:84,badge:model.screen == .failure ? (model.failure.code == "cancelled" ? "pause.fill" : "exclamationmark") : (model.screen == .driveMissing ? "externaldrive" : nil))
+                                AuthorLink()
+                            }
                             LauncherHeading(title:model.title,subtitle:subtitle)
                         }
                         details
@@ -307,7 +310,7 @@ struct FirstMatchTip: View {
                 .buttonStyle(.borderless).foregroundStyle(.secondary).help("Dismiss this tip").accessibilityLabel("Dismiss tip")
         }.font(LauncherStyle.font(13)).foregroundStyle(.secondary)
             .padding(16).frame(maxWidth:.infinity,alignment:.leading)
-            .background(LauncherStyle.accent.opacity(0.09),in:RoundedRectangle(cornerRadius:16,style:.continuous))
+            .background(LauncherStyle.accent.opacity(0.09),in:RoundedRectangle(cornerRadius:10,style:.continuous))
     }
 }
 // The Play screen's choice of game, remembered (AppModel.selectedGame). Each tile says
@@ -336,7 +339,7 @@ struct GamePicker: View {
     }
     private func tile(_ game:AppModel.Game) -> some View {
         let selected=model.selectedGame == game, installed=model.installedGames.contains(game)
-        let shape=RoundedRectangle(cornerRadius:16,style:.continuous)
+        let shape=RoundedRectangle(cornerRadius:10,style:.continuous)
         return Button { model.selectedGame=game } label: {
             VStack(alignment:.leading,spacing:4) {
                 Text(game.title).font(LauncherStyle.font(14,.semibold)).foregroundStyle(.primary).lineLimit(1)
@@ -375,9 +378,9 @@ private struct FooterTileBody: View {
     @State private var hovering=false
     var body:some View {
         configuration.label.foregroundStyle(enabled ? Color.primary : Color.secondary)
-            .background(LauncherStyle.surface(scheme).opacity(hovering ? 1 : 0.72),in:RoundedRectangle(cornerRadius:16,style:.continuous))
-            .overlay { RoundedRectangle(cornerRadius:16,style:.continuous).strokeBorder(focused ? Color.primary.opacity(0.8) : Color.primary.opacity(hovering ? 0.16 : 0.08),lineWidth:focused ? 2 : 1) }
-            .contentShape(RoundedRectangle(cornerRadius:16,style:.continuous))
+            .background(LauncherStyle.surface(scheme).opacity(hovering ? 1 : 0.72),in:RoundedRectangle(cornerRadius:10,style:.continuous))
+            .overlay { RoundedRectangle(cornerRadius:10,style:.continuous).strokeBorder(focused ? Color.primary.opacity(0.8) : Color.primary.opacity(hovering ? 0.16 : 0.08),lineWidth:focused ? 2 : 1) }
+            .contentShape(RoundedRectangle(cornerRadius:10,style:.continuous))
             .opacity(configuration.isPressed ? 0.7 : 1)
             .onHover { hovering=$0 }
     }

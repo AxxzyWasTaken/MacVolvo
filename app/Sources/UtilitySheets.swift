@@ -514,6 +514,7 @@ struct AboutSheet:View {
             LauncherPanel {
                 VStack(alignment:.leading,spacing:10) {
                     Text("Credits").font(LauncherStyle.font(15,.semibold)).accessibilityAddTraits(.isHeader)
+                    AuthorLink()
                     Text("\(Brand.name) runs Counter-Strike 2 and Deadlock through Steam on the Wine engine, Metal translation and setup that Recall built for Overwatch.")
                         .font(LauncherStyle.font(13)).lineSpacing(3).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
                     UpstreamLink()

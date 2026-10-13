@@ -65,6 +65,8 @@ def build(output,workspace,runtime_archive,icon=None,identity=None):
     shutil.copy2(ROOT/'licenses/PROJECT-LINKS-NOTICE.txt',resources/'PROJECT-LINKS-NOTICE.txt')
     for name in RESOURCES:
         shutil.copy2(ROOT/'app/Resources'/name,resources/name)
+    # Chakra Petch (SIL OFL 1.1) with its license, registered by LauncherStyle at run time.
+    shutil.copytree(ROOT/'app/Resources/Fonts',resources/'Fonts')
     if icon:shutil.copy2(icon,resources/'AppIcon.icns')
     else:
         iconset=output.parent/'AppIcon.iconset'

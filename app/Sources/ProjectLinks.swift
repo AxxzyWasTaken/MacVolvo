@@ -87,6 +87,17 @@ struct Wordmark:View {
             .accessibilityElement().accessibilityLabel(Brand.name).accessibilityAddTraits(.isHeader)
     }
 }
+/// "by @haeli05", under the wordmark and in About; opens the author's GitHub.
+struct AuthorLink:View {
+    var body:some View {
+        Link(destination:Brand.authorPage) {
+            HStack(spacing:5) {
+                Text("by").foregroundStyle(.secondary)
+                Text(Brand.author).foregroundStyle(LauncherStyle.accent)
+            }.font(LauncherStyle.font(13,.semibold)).tracking(0.6)
+        }.buttonStyle(.plain).pointerStyle(.link).help("haeli05 on GitHub")
+    }
+}
 /// The project MacVolvo is built on, credited in About.
 struct UpstreamLink:View {
     var body:some View {
