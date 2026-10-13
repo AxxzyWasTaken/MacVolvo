@@ -38,7 +38,10 @@ IMAGE_LIMIT = 4 * 1024 * 1024
 
 
 def is_image_asset(name, data):
-    """Reviewed artwork under app/Resources is the only binary content allowed."""
+    """Reviewed artwork under app/Resources, and the bundled OFL fonts beside their
+    license in app/Resources/Fonts, are the only binary content allowed."""
+    if name.startswith('app/Resources/Fonts/') and name.lower().endswith('.ttf'):
+        return len(data) <= IMAGE_LIMIT
     return (name.startswith('app/Resources/') and name.lower().endswith(IMAGE_SUFFIXES)
             and len(data) <= IMAGE_LIMIT)
 
