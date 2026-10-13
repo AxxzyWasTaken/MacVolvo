@@ -1,18 +1,27 @@
 import AppKit
 
-/// A fullscreen resolution the games use. Settings offers six (docs/candidate-parity-contract.json):
-/// 1080p, 1440p and 4K, each in the shape of MacBook screens (16:10) or of monitors
-/// and TVs (16:9); the player can also choose another in the game's Video settings,
-/// such as an ultrawide monitor's own size, and MacVolvo keeps it. The window driver
-/// shows the game's image on any display, scaled to fit, without changing the
-/// display's own resolution.
+/// A game launch size. The canvas supports any dimensions from 640 × 480 to
+/// 16384 × 16384; a size larger than Wine's main display is fitted at launch.
 struct DisplayResolution:Hashable {
     enum Shape:CaseIterable { case macBook, monitor }
     enum Size:CaseIterable { case standard, high, ultra }
     let width:Int
     let height:Int
     static let standard=DisplayResolution(width:1920,height:1200)
-    static let all=Shape.allCases.flatMap { shape in Size.allCases.map { DisplayResolution(shape:shape,size:$0) } }
+    /// Keep the original defaults when upgrading an existing installation.
+    static let legacy=Shape.allCases.flatMap { shape in Size.allCases.map { DisplayResolution(shape:shape,size:$0) } }
+    /// Common game sizes, including CS2's competitive 4:3 choices. The menu also
+    /// includes this display's modes and any valid size the player saved.
+    static let all:[DisplayResolution]=[
+        [640,480],[800,600],[1024,768],[1152,864],[1280,960],[1440,1080],[1600,1200],[1920,1440],
+        [1280,1024],
+        [960,600],[1280,800],[1440,900],[1680,1050],[1920,1200],[2304,1440],[2560,1600],[3840,2400],
+        [960,540],[1024,576],[1280,720],[1366,768],[1600,900],[1920,1080],[2048,1152],[2560,1440],
+        [3840,2160],[5120,2880],[7680,4320],
+        [1440,960],[2160,1440],[2880,1920],[3000,2000],
+        [2560,1080],[3440,1440],[3840,1600],[5120,2160],
+        [3840,1080],[5120,1440],[7680,2160]
+    ].map { DisplayResolution(width:$0[0],height:$0[1]) }
     init(width:Int, height:Int) { self.width=width;self.height=height }
     init(shape:Shape, size:Size) {
         let width=[Size.standard:1920,.high:2560,.ultra:3840][size]!
@@ -21,16 +30,47 @@ struct DisplayResolution:Hashable {
     var shape:Shape { width*10 == height*16 ? .macBook : .monitor }
     var size:Size { width >= 3840 ? .ultra : width >= 2560 ? .high : .standard }
     var label:String { "\(width) × \(height)" }
-    var isSupported:Bool { DisplayResolution.all.contains(self) }
+    var isSupported:Bool { (640...16384).contains(width) && (480...16384).contains(height) }
+    var isPreset:Bool { DisplayResolution.all.contains(self) }
     var ratio:CGFloat { CGFloat(width)/CGFloat(max(height,1)) }
-    var aspect:String { DisplayResolution.aspectName(ratio) }
+    var aspect:String {
+        let named=DisplayResolution.aspectName(ratio)
+        guard named.hasSuffix(":1") else { return named }
+        func gcd(_ a:Int,_ b:Int) -> Int { b == 0 ? a : gcd(b,a%b) }
+        let divisor=gcd(max(width,1),max(height,1))
+        return "\(width/divisor):\(height/divisor)"
+    }
     /// The nearest common name for a width-to-height ratio.
     static func aspectName(_ ratio:CGFloat) -> String {
         let known:[(String,CGFloat)]=[("16:10",1.6),("16:9",16.0/9),("21:9",2.37),("32:9",32.0/9),("3:2",1.5),("4:3",4.0/3),("5:4",1.25)]
-        return known.min { abs($0.1-ratio) < abs($1.1-ratio) }!.0
+        let nearest=known.min { abs($0.1-ratio) < abs($1.1-ratio) }!
+        return abs(nearest.1-ratio)/nearest.1 < 0.02 ? nearest.0 : String(format:"%.2f:1",Double(ratio))
+    }
+    static func parsed(width:String,height:String) -> DisplayResolution? {
+        guard let w=Int(width.trimmingCharacters(in:.whitespacesAndNewlines)),
+              let h=Int(height.trimmingCharacters(in:.whitespacesAndNewlines)) else { return nil }
+        let choice=DisplayResolution(width:w,height:h)
+        return choice.isSupported ? choice : nil
+    }
+    static func choices(on display:MainDisplay?,keeping saved:DisplayResolution) -> [DisplayResolution] {
+        let choices=all+(display?.resolutions ?? [])+[saved]
+        return Set(choices.filter(\.isSupported)).sorted {
+            $0.width == $1.width ? $0.height < $1.height : $0.width < $1.width
+        }
+    }
+    struct Group:Identifiable {
+        let aspect:String
+        let resolutions:[DisplayResolution]
+        var id:String { aspect }
+    }
+    static func grouped(_ choices:[DisplayResolution]) -> [Group] {
+        let grouped=Dictionary(grouping:choices,by:\.aspect)
+        let order=["4:3","5:4","16:10","16:9","3:2","21:9","32:9"]
+        let aspects=order.filter { grouped[$0] != nil }+grouped.keys.filter { !order.contains($0) }.sorted()
+        return aspects.map { Group(aspect:$0,resolutions:grouped[$0]!) }
     }
     /// Where a new installation starts, and where Troubleshooting's reset returns:
-    /// 1080p in the main display's shape, the fastest of Settings' sizes.
+    /// 1080p in the main display's shape.
     static func initial(for main:MainDisplay?) -> DisplayResolution {
         main?.shape == .monitor ? DisplayResolution(shape:.monitor,size:.standard) : .standard
     }
@@ -74,6 +114,8 @@ struct MainDisplay:Equatable {
     let pixels:CGSize
     /// The current refresh rate, 0 when unknown.
     let refresh:Double
+    /// Game-sized dimensions from macOS's modes, plus the visible fullscreen area.
+    let resolutions:[DisplayResolution]
     /// The Displays setting drawn at the screen's own pixels nearest the current desktop
     /// size, with the fastest refresh rate it offers.
     let sharpest:DisplayMode?
@@ -92,6 +134,9 @@ struct MainDisplay:Equatable {
         // Below the camera housing: the same share of the screen as of its points.
         let full=native ?? CGSize(width:points.width*scale,height:points.height*scale)
         pixels=CGSize(width:full.width.rounded(),height:(full.height*(points.height-cameraInset)/max(points.height,1)).rounded())
+        let dimensions=modes.flatMap { [$0.points,$0.pixels] }+[pixels]
+        resolutions=Array(Set(dimensions.map { DisplayResolution(width:Int($0.width),height:Int($0.height)) }.filter(\.isSupported)))
+            .sorted { $0.width == $1.width ? $0.height < $1.height : $0.width < $1.width }
         sharpest=native.flatMap { native in
             let candidates=modes.filter { $0.pixels == native }
             let distance={ (mode:DisplayMode) in abs(log(mode.points.width/max(points.width,1))) }
@@ -103,6 +148,8 @@ struct MainDisplay:Equatable {
     init(name:String, builtIn:Bool, points:CGSize, pixels:CGSize) {
         self.name=name;self.builtIn=builtIn;self.points=points;self.pixels=pixels
         drawn=pixels;native=nil;refresh=0;sharpest=nil
+        let size=DisplayResolution(width:Int(pixels.width),height:Int(pixels.height))
+        resolutions=size.isSupported ? [size] : []
     }
     var shape:DisplayResolution.Shape { pixels.width/max(pixels.height,1) < 1.69 ? .macBook : .monitor }
     var aspect:String { DisplayResolution.aspectName(pixels.width/max(pixels.height,1)) }
@@ -112,13 +159,17 @@ struct MainDisplay:Equatable {
     func fits(_ resolution:DisplayResolution) -> Bool {
         CGFloat(resolution.width) <= points.width*2 && CGFloat(resolution.height) <= points.height*2
     }
-    /// What the game uses on this display for a choice: the choice if it fits, else the
-    /// largest that fits in the same shape, else the largest that fits at all.
+    /// What the game uses on this display: scale oversized choices proportionally
+    /// so their aspect ratio and pointer coordinates continue to agree.
     func fitted(_ resolution:DisplayResolution) -> DisplayResolution {
         guard !fits(resolution) else { return resolution }
-        let fitting=DisplayResolution.all.filter(fits)
-        let largest={ (options:[DisplayResolution]) in options.max { $0.width*$0.height < $1.width*$1.height } }
-        return largest(fitting.filter { $0.shape == resolution.shape }) ?? largest(fitting) ?? resolution
+        guard resolution.isSupported else { return .standard }
+        let scale=min(points.width*2/CGFloat(resolution.width),points.height*2/CGFloat(resolution.height))
+        let scaled=DisplayResolution(width:Int(floor(CGFloat(resolution.width)*scale)),height:Int(floor(CGFloat(resolution.height)*scale)))
+        if scaled.isSupported { return scaled }
+        let fallbackScale=min(1,points.width*2/1920,points.height*2/1200)
+        let fallback=DisplayResolution(width:Int(floor(1920*fallbackScale)),height:Int(floor(1200*fallbackScale)))
+        return fallback.isSupported ? fallback : resolution
     }
     /// What the player sees with a resolution on this display, for Settings.
     func caption(for choice:DisplayResolution) -> String {

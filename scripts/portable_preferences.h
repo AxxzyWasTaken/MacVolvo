@@ -18,12 +18,6 @@ static NSString *settingsPath(void) {
     for(NSString *p in found)if(!insideRoot(p))fail(@"settings_outside_installation");
     if(found.count>1)fail(@"multiple_game_settings");return found.firstObject;
 }
-/* The resolutions Settings offers (the contract's six). */
-static BOOL supportedResolution(NSInteger width, NSInteger height) {
-    for(NSArray *option in candidateResolutions())
-        if([option[0] integerValue]==width && [option[1] integerValue]==height)return YES;
-    return NO;
-}
 /* A resolution the game can have: one of Settings' six or one chosen in Overwatch's own
  * Video settings. The window driver's canvas shows each of those that fits inside the
  * display as Wine sees it, up to 16384 (cocoa_v1.m); fittedResolution keeps to that. */
@@ -251,14 +245,13 @@ static void configureDisplay(NSInteger width, NSInteger height) {configurePrefer
  * stays for the next larger display. */
 static void fitResolution(NSInteger *width, NSInteger *height, NSInteger maxWidth, NSInteger maxHeight) {
     if(*width<=maxWidth && *height<=maxHeight)return;
-    NSInteger bestWidth=0,bestHeight=0;
-    for(int sameShape=1;sameShape>=0 && !bestWidth;sameShape--)
-        for(NSArray *option in candidateResolutions()) {
-            NSInteger w=[option[0] integerValue],h=[option[1] integerValue];
-            if(w>maxWidth || h>maxHeight || (sameShape && w*(*height)!=h*(*width)))continue;
-            if(w*h>bestWidth*bestHeight){bestWidth=w;bestHeight=h;}
-        }
-    if(bestWidth){*width=bestWidth;*height=bestHeight;}
+    double scale=MIN((double)maxWidth/MAX(*width,1),(double)maxHeight/MAX(*height,1));
+    NSInteger w=(NSInteger)floor(*width*scale),h=(NSInteger)floor(*height*scale);
+    if(!gameResolution(w,h)) {
+        scale=MIN(1.0,MIN((double)maxWidth/1920,(double)maxHeight/1200));
+        w=(NSInteger)floor(1920*scale);h=(NSInteger)floor(1200*scale);
+    }
+    if(gameResolution(w,h)){*width=w;*height=h;}
 }
 static void fittedResolution(NSInteger *width, NSInteger *height) {
     CGDisplayModeRef mode=CGDisplayCopyDisplayMode(CGMainDisplayID());
@@ -266,6 +259,36 @@ static void fittedResolution(NSInteger *width, NSInteger *height) {
     NSInteger maxWidth=(NSInteger)CGDisplayModeGetWidth(mode)*2,maxHeight=(NSInteger)CGDisplayModeGetHeight(mode)*2;
     CGDisplayModeRelease(mode);
     fitResolution(width,height,maxWidth,maxHeight);
+}
+/* Independent launch choices for the two games. Older installations inherit the
+ * remembered main-display choice until a per-game option is saved. */
+static NSDictionary *gameLaunchOptions(BOOL fitted) {
+    NSInteger width,height;NSString *source;nextResolution(&width,&height,&source,NO);
+    NSDictionary *saved=state()[@"game_launch_options"];
+    if(![saved isKindOfClass:NSDictionary.class])saved=@{};
+    NSMutableDictionary *result=[NSMutableDictionary dictionary];
+    for(NSUInteger i=0;i<mvGameCount;i++) {
+        NSDictionary *choice=saved[mvGames[i].key];
+        if(![choice isKindOfClass:NSDictionary.class])choice=@{};
+        NSInteger w=[choice[@"width"] integerValue],h=[choice[@"height"] integerValue];
+        if(!gameResolution(w,h)){w=width;h=height;}
+        if(fitted)fittedResolution(&w,&h);
+        result[mvGames[i].key]=@{@"width":@(w),@"height":@(h),@"fullscreen":@(![choice[@"fullscreen"] isEqual:@NO])};
+    }
+    return result;
+}
+static void configureGameLaunchOptions(NSString *game, NSInteger width, NSInteger height, NSString *fullscreen) {
+    if(!mvGame(game))fail(@"unknown_game");
+    if(!gameResolution(width,height))fail(@"unsupported_resolution");
+    if(fullscreen && ![fullscreen isEqual:@"0"] && ![fullscreen isEqual:@"1"])fail(@"invalid_arguments");
+    for(NSDictionary *p in sessionProcesses())if([p[@"kind"] isEqual:@"game"])fail(@"close_game_before_maintenance");
+    NSMutableDictionary *s=state();
+    NSMutableDictionary *choices=[s[@"game_launch_options"] isKindOfClass:NSDictionary.class] ? [s[@"game_launch_options"] mutableCopy] : [NSMutableDictionary dictionary];
+    NSMutableDictionary *choice=[choices[game] isKindOfClass:NSDictionary.class] ? [choices[game] mutableCopy] : [NSMutableDictionary dictionary];
+    choice[@"width"]=@(width);choice[@"height"]=@(height);
+    if(fullscreen)choice[@"fullscreen"]=@([fullscreen isEqual:@"1"]);
+    choices[game]=choice;s[@"game_launch_options"]=choices;writeJSON(s,join(root,@"state.json"));
+    event(@"display_saved",@{@"game":game,@"width":@(width),@"height":@(height),@"fullscreen":@(![choice[@"fullscreen"] isEqual:@NO]),@"pending_first_game":@NO});
 }
 /* The renderer profile with its canvas size set to this launch's resolution. DXMT matches
  * option names exactly, so the profile's own spelling is kept: a case-insensitive edit

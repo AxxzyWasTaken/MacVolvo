@@ -35,7 +35,7 @@
    "patch": "patches/wine-v1-canvas.patch",
    "patch_sha256": "33d57c155761838988d98777a7cddb1b2d00417d07b2e19ca9533221aa9b6f65",
    "additional_patch": "patches/wine-mouselook.patch",
-   "additional_patch_sha256": "4e9d4ab2aff6ec38b03100d4802d2764efe1e33caf151cdb4c5de7a8dfa3dfdb",
+   "additional_patch_sha256": "343f993f1f368500b51ac1fa13ffb3d3cbb3433a15c1b04947153cb1f9858545",
    "additional_patch_applies_after": "patches/wine-v1-canvas.patch",
    "v1_patches": [
     {
@@ -128,7 +128,7 @@
   },
   {
    "path": "patches/wine-mouselook.patch",
-   "sha256": "4e9d4ab2aff6ec38b03100d4802d2764efe1e33caf151cdb4c5de7a8dfa3dfdb"
+   "sha256": "343f993f1f368500b51ac1fa13ffb3d3cbb3433a15c1b04947153cb1f9858545"
   },
   {
    "path": "patches/dxmt-v1-performance.patch",

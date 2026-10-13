@@ -25,7 +25,7 @@ def build():
     BUILD.mkdir(parents=True, exist_ok=True)
     library = BUILD / 'libprocess_probe.dylib'
     before = digest(SOURCE)
-    subprocess.run(['/usr/bin/clang', '-O2', '-Wall', '-Wextra', '-Werror',
+    subprocess.run(['/usr/bin/clang', '-arch', 'arm64', '-arch', 'x86_64', '-O2', '-Wall', '-Wextra', '-Werror',
                     '-dynamiclib', str(SOURCE), '-o', str(library)], check=True)
     if digest(SOURCE) != before:
         raise RuntimeError('Probe source changed during build')
@@ -35,6 +35,12 @@ def build():
 
 class NativeProbe:
     def __init__(self):
+        translated = subprocess.run(['/usr/sbin/sysctl', '-in', 'sysctl.proc_translated'],
+                                    capture_output=True, text=True).stdout.strip()
+        if translated == '1':
+            # Rosetta virtualizes mach_timebase_info, but proc_pid_rusage returns
+            # host ticks. Mixing them underreports CPU time on Apple Silicon.
+            raise RuntimeError('Run counters with arch -arm64 /usr/bin/python3; Rosetta changes the clock timebase')
         library = BUILD / 'libprocess_probe.dylib'
         manifest = json.loads((BUILD / 'manifest.json').read_text())
         if manifest != dict(source_sha256=digest(SOURCE), library_sha256=digest(library)):

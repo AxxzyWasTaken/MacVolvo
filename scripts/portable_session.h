@@ -19,7 +19,7 @@ static NSArray *sessionProcesses(void) {
     for(NSString *line in [table componentsSeparatedByString:@"\n"]) {
         NSTextCheckingResult *m=[rx firstMatchInString:line options:0 range:NSMakeRange(0,line.length)];if(!m)continue;
         NSString *name=[line substringWithRange:[m rangeAtIndex:3]];
-        BOOL game=isGameProcess(name),client=[name.lowercaseString hasSuffix:@"\\steam.exe"];
+        BOOL game=isGameProcess(name),client=[mvProcessName(name) isEqual:@"steam.exe"];
         if(!game && !client)continue;
         NSString *pid=[line substringWithRange:[m rangeAtIndex:1]],*start=[line substringWithRange:[m rangeAtIndex:2]];
         NSString *identity=[NSString stringWithFormat:@"%@|%@",pid,start];
@@ -52,27 +52,10 @@ static BOOL focusSession(NSArray *processes) {
     return NO;
 }
 static void watchClient(void) {
-    // The monitor has its own lock. It never holds setup.lock during a match.
-    int fd=open(join(root,@"launch-monitor.lock").fileSystemRepresentation,O_CREAT|O_RDWR|O_NOFOLLOW,0600);
-    if(fd<0)fail(@"monitor_lock_failed");if(flock(fd,LOCK_EX|LOCK_NB)){close(fd);return;}
-    flock(lockFD,LOCK_UN);close(lockFD);lockFD=-1;
-    NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:1800],*seen=nil,*clientSeen=[NSDate date];
-    while(deadline.timeIntervalSinceNow>0 && !cancelRequested) {
-        NSArray *rows=sessionProcesses();NSMutableArray *clients=[NSMutableArray array];BOOL game=NO;
-        for(NSDictionary *p in rows) {if([p[@"kind"] isEqual:@"game"])game=YES;else[clients addObject:p];}
-        if(clients.count)clientSeen=[NSDate date];
-        if(!game)seen=nil;else if(!seen)seen=[NSDate date];
-        if(!game && -clientSeen.timeIntervalSinceNow>120)break;
-        if(seen && -seen.timeIntervalSinceNow>=25) {
-            [membershipCache removeAllObjects];
-            NSArray *fresh=sessionProcesses();BOOL stillGame=NO;
-            for(NSDictionary *p in fresh)stillGame|=[p[@"kind"] isEqual:@"game"];
-            if(stillGame)for(NSDictionary *p in fresh)if([p[@"kind"] isEqual:@"client"] && [clients containsObject:p])kill([p[@"pid"] intValue],SIGTERM);
-            event(@"client_monitor_finished",@{@"game_running":@(stillGame)});break;
-        }
-        [NSThread sleepForTimeInterval:2];
-    }
-    close(fd);
+    // Compatibility with workers/apps that still invoke "watch". Steam supplies
+    // online services and owns its browser while a game runs; the old Battle.net
+    // policy of terminating the client after 25 seconds must never apply here.
+    event(@"client_monitor_finished",@{@"client_kept_running":@YES});
 }
 /* The displays as Wine takes them in when its session starts: each online display, which
  * one is main, where it sits, its size in points and pixels, and what it mirrors. Wine

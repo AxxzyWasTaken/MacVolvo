@@ -229,3 +229,103 @@ check restore it (event `steam_helper_restoring`); the wrapper also refuses to r
 `steamwebhelper_real.exe`. Verified: repair start restored Steam's 7.4 MB helper, the next
 start drew Steam's window with 6 helper processes. Same fix in `scripts/cs2_spike.sh`.
 Also: Play screen has a full-size secondary "Open Steam" button beside Play.
+
+## Deadlock launch repair (2026-10-13)
+
+The owner reported startup crashes. Steam's retained history shows three launches
+at 12:18–12:24 MYT with only `-steam -console`, each ending with `0xC0000409`.
+A later MacVolvo launch supplying `-dx11 -novid` and display arguments exited
+normally. The installed `Deadlock/game/citadel/cfg/boot.vcfg` explicitly selected
+`DefaultRenderSystemOption` = `-vulkan`. An earlier nonfatal dump used DX11,
+so the historical command line alone does not establish each run's backend.
+
+With no game running, the installed boot file was backed up as
+`boot.vcfg.macvolvo-backup`, then atomically changed to `-dx11`; verification
+confirmed that only this value changed. This repairs Steam Library launches,
+which bypass MacVolvo's existing `-dx11` argument. Explicit Steam launch options
+can still override the default; none were present in the inspected configuration.
+
+Source safeguard: `configureDeadlockRenderer()` in `scripts/portable_steam.h`
+preserves other fields and the first backup, and `launchClient()` calls it before
+the existing-Steam early return when no game runs. A write failure blocks an
+explicit Deadlock launch with `game_renderer_write_failed`, but does not prevent
+CS2 or Steam opening. The app presents a matching error in `SetupService.swift`.
+These changes are included in the v0.9 local build described below.
+
+Validation used the already-running Steam's ordinary `-applaunch 1422450`, without
+an explicit renderer argument. The resulting process loaded
+`rendersystemdx11.dll`, DXMT's `d3d11.dll` and `winemetal.dll`/`winemetal.so`.
+The original Vulkan preference remains in the backup for rollback. Keep new
+verification results scoped to startup; this does not establish in-match stability.
+
+## MacVolvo v0.9 stability build (2026-10-13)
+
+Owner requested app version **0.9**, per-game resolutions, Steam Properties
+launch options, fixes for intermittent black startup and post-match mouse loss,
+and investigation of CS2 combat spikes and the earlier sustained 4 FPS collapse.
+
+Delivered app path: `runtime/build/release/MacVolvo.app`; source build retained at
+`runtime/build/v0.9-final/MacVolvo.app`. Previous app is
+`runtime/build/release/MacVolvo-before-v0.9.app`. Runtime: `phase2-20261013.1`,
+archive SHA-256 `ce2530ec4a8656a6c7de71b4d72b7969c786b2a525295bf3014763f9235b2583`.
+The isolated native driver build and ABI/dependency proof are under
+`runtime/build/winemac-launch-fixes/`; derivation script and proof under
+`runtime/build/launch-fixes/`. Only winemac.so differs from the base runtime;
+all other file hashes and symlinks were verified. This is a local unsigned app
+with an ad-hoc-signed replacement driver, not a published/notarized release.
+
+Functional raw-motion timestamps no longer use the diagnostics-only clock
+(which returned zero without WINEMAC_INPUT_STATS, suppressing pointer fallback).
+Session discovery now accepts Windows and Unix process paths, then still
+requires mapped files from the exact owned engine and prefix. Previously it
+missed a live Steam process when ps reported its Unix executable path.
+
+Steam is shut down normally before changing its cached localconfig LaunchOptions;
+backups are private and unrelated VDF contents/user arguments are preserved.
+Options apply to both games, with separate resolution/fullscreen settings,
+DX11 and -nojoy, Deadlock -novid, and CS2 +fps_max 120 unless a user launch-option
+cap already exists. Resolution choices include common ratios, display modes and
+custom 640×480–16384×16384 sizes (fitted at launch when oversized).
+An idle Steam may reopen to apply changes. UI explains that starting through
+MacVolvo once syncs changed choices into Steam Properties.
+
+Removed the inherited monitor that terminated Steam after 25 seconds; old `watch`
+invocations are harmless no-ops. Cold launches use unique logs and a silent Steam
+handoff. LaunchReadiness waits for a game window on game launches, preventing
+early activation of Steam over fullscreen initialization.
+
+CS2 gets four compiler workers versus Deadlock's inherited eight. This is a
+contention mitigation, not a proven fix for combat spikes. The new opt-in
+`diagnostic-launch --game cs2` includes shader/pipeline/resource and input-state
+traces. `scripts/measure_macvolvo.py` adds bounded native counters with exact
+session/PID-start admission. Run it with native ARM Python: Rosetta virtualizes
+the clock timebase; the native reader now explicitly refuses translated Python.
+The probe builds both architectures, and its tests use CLOCK_UPTIME_RAW because
+macOS Python 3.9's monotonic clock has a process-relative origin.
+
+Deadlock presented for roughly eight minutes in the first patched-runtime smoke
+test; mapped files confirmed the replacement driver and DX11/DXMT. This does not
+verify post-match camera recapture or every intermittent black-screen case.
+The owner's later restart of the original app restored the old runtime; the
+v0.9 delivery replaces that original path to keep the fix active. The old
+runtime remains available as the prior version for rollback.
+
+Audio help records the owner's successful 96 kHz workaround; no global audio
+format is changed. Research, hypotheses and reproduction commands are in
+`docs/CS2-PERFORMANCE-INVESTIGATION.md`. No renderer allocator patch is shipped.
+
+Validation: 26 Python checks passed for raw input timing, Steam VDF preservation,
+Windows/Unix process admission, PID reuse exclusion and native process counters;
+Swift display and launch-readiness fixtures passed. Full native app build passed,
+and all 228 bundle files were checked against the generated build manifest.
+Version metadata and offline What's New both identify v0.9. CS2 combat behavior
+and Deadlock mouse recapture after a match still require player verification on
+this runtime, not the old app that was reopened during the earlier test.
+
+Final check: the original app path runs v0.9 and the newly started Deadlock
+process maps `phase2-20261013.1/lib/wine/x86_64-unix/winemac.so`. The owner
+confirmed Esc and Cmd-Tab did not recover the earlier click-without-pan symptom.
+No additional speculative input-state patch was made; test the corrected timer
+across a complete match before declaring that symptom resolved. CS2 startup
+produced frames on the new runtime; no fight or sustained-collapse trace has
+yet established the remaining cause.

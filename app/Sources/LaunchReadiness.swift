@@ -39,14 +39,19 @@ enum LaunchReadiness {
         // Existing sessions have already received an activation request from
         // the scoped worker. A minimized/other-desktop window must not send a
         // reopen through the fresh-launch timeout again.
-        if let existing=launchEvents.last(where:{$0["stage"] as? String == "session_existing"}) {
+        let launchingGame=launchEvents.contains {$0["stage"] as? String == "game_launch_requested"}
+        if let existing=launchEvents.last(where:{$0["stage"] as? String == "session_existing"}),
+           !launchingGame || existing["kind"] as? String == "game" {
             return .existing(existing["kind"] as? String == "game" ? "game" : "Steam")
         }
         let clock=ContinuousClock(), deadline=clock.now.advanced(by:timeout)
         var previous: Int32?
         while clock.now < deadline {
             if stopped() || Task.isCancelled { return .stopped }
-            let processes=try await session()
+            let sessionProcesses=try await session()
+            // Activating Steam while a fullscreen game is initializing can
+            // steal its input focus. A game launch waits for the game window.
+            let processes=launchingGame ? sessionProcesses.filter {$0["kind"] as? String == "game"} : sessionProcesses
             let visible=await windows()
             if stopped() || Task.isCancelled { return .stopped }
             let pid=visibleProcess(visible,processes:processes)

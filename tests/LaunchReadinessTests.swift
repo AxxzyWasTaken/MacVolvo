@@ -35,6 +35,19 @@ import CoreGraphics
         } catch let failure as SetupFailure { precondition(failure.code == "session_membership_unknown") }
         let game=LaunchReadiness.visibleProcess([window(101),window(202)],processes:owned+[["pid":202,"kind":"game"]])
         precondition(game == 202,"Running game not preferred")
+        for events in [
+            [["stage":"game_launch_requested"]],
+            [["stage":"session_existing","kind":"client"],["stage":"game_launch_requested"]]
+        ] {
+            var gameTicks=0
+            let launched=try await LaunchReadiness.wait(launchEvents:events,
+                timeout:.seconds(2),interval:.milliseconds(5),stopped:{false},
+                session:{owned+[["pid":202,"kind":"game"]]},windows:{
+                    defer {gameTicks += 1}
+                    return gameTicks < 3 ? [window(101)] : [window(101),window(202)]
+                })
+            precondition(launched == .ready(202) && gameTicks == 5,"Game launch activated Steam before the game window")
+        }
         print("PASS: immediate existing-session routing without polling, delayed/stable window handoff, foreign and invisible window rejection, timeout, stop, identity failure, game preference")
     }
 }

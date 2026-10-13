@@ -66,13 +66,14 @@ an account you're prepared to take that risk with.
   with the GPU off).
 - **First matches stutter** while each game compiles its shaders for your Mac. It settles as
   you play the same maps again.
-- **Audio can buzz slightly** with the Mac's speakers at 44.1 kHz. Setting them to 48 kHz in
-  Audio MIDI Setup helps.
+- **Audio can buzz or crackle.** In Audio MIDI Setup, try 96 kHz if your output supports it;
+  this resolved the issue on the tested M2 Max. Other outputs may work better at 48 kHz.
+  MacVolvo leaves the system audio format under your control.
 
 ## Building from source
 
 See [build instructions](docs/BUILDING.md) and the [architecture notes](app/ARCHITECTURE.md).
-MacVolvo ships Recall 1.3.0's runtime unchanged; the MacVolvo-specific pieces are the Steam
+MacVolvo uses Recall 1.3.0's runtime with a mouse timing fix; the MacVolvo-specific pieces are the Steam
 worker (`scripts/portable_steam.h`), the Steam window fix (`scripts/webhelper_wrapper.c`) and
 the app. [docs/HANDOFF.md](docs/HANDOFF.md) records how the Steam window fix was found.
 

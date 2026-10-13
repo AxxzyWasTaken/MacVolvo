@@ -29,7 +29,9 @@ class NativeCounters(unittest.TestCase):
         expected = time.process_time() - cpu
         actual = (b['user_ns'] + b['system_ns'] - a['user_ns'] - a['system_ns']) / 1e9
         self.assertAlmostEqual(actual, expected, delta=.015)
-        self.assertLess(abs(b['monotonic_ns'] - time.monotonic_ns()), 10_000_000)
+        # Python 3.9's monotonic clock has a process-relative origin on macOS;
+        # compare against the explicit awake-time clock used by the C reader.
+        self.assertLess(abs(b['monotonic_ns'] - time.clock_gettime_ns(time.CLOCK_UPTIME_RAW)), 10_000_000)
         self.assertLess(abs(b['unix_us'] - time.time_ns() // 1000), 10_000)
 
     def test_allocated_touched_pages_increase_faults_and_footprint(self):

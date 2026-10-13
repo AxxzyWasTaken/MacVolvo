@@ -17,6 +17,63 @@ enum SettingsTab:String, CaseIterable, Identifiable {
         }
     }
 }
+/// The same game launch choices on Play and in Settings. Desktop modes and a
+/// custom size supplement the common game resolutions without losing saved sizes.
+struct LaunchResolutionPicker:View {
+    let gameName:String
+    let resolution:DisplayResolution
+    let main:MainDisplay?
+    var disabled=false
+    let choose:(DisplayResolution)->Void
+    @State private var showCustom=false
+    @State private var width=""
+    @State private var height=""
+    private var custom:DisplayResolution? { DisplayResolution.parsed(width:width,height:height) }
+    var body:some View {
+        Menu {
+            ForEach(DisplayResolution.grouped(DisplayResolution.choices(on:main,keeping:resolution))) { group in
+                Menu(group.aspect) {
+                    ForEach(group.resolutions,id:\.self) { option in
+                        Button { choose(option) } label: {
+                            if option == resolution { Label(option.label,systemImage:"checkmark") }
+                            else { Text(option.label) }
+                        }
+                    }
+                }
+            }
+            Divider()
+            Button("Custom resolution…") {
+                width=String(resolution.width);height=String(resolution.height);showCustom=true
+            }
+        } label: {
+            Text("\(resolution.label) · \(resolution.aspect)").monospacedDigit()
+        }.menuStyle(.borderedButton).controlSize(.small).disabled(disabled)
+            .accessibilityLabel("\(gameName) launch resolution, \(resolution.label), \(resolution.aspect)")
+            .sheet(isPresented:$showCustom) {
+                VStack(alignment:.leading,spacing:16) {
+                    Text("\(gameName) resolution").font(LauncherStyle.font(20,.semibold))
+                    HStack {
+                        TextField("Width",text:$width).accessibilityLabel("Width in pixels")
+                        Text("×")
+                        TextField("Height",text:$height).accessibilityLabel("Height in pixels")
+                    }.textFieldStyle(.roundedBorder)
+                    Text("Width: 640–16384 pixels. Height: 480–16384 pixels.")
+                        .font(LauncherStyle.font(12)).foregroundStyle(.secondary)
+                    if let custom {
+                        Text(main?.caption(for:custom) ?? "\(custom.aspect) · Applies the next time this game starts.")
+                            .font(LauncherStyle.font(13)).fixedSize(horizontal:false,vertical:true)
+                    }
+                    HStack {
+                        Spacer()
+                        Button("Cancel") { showCustom=false }.keyboardShortcut(.cancelAction)
+                        Button("Save") {
+                            if let custom { choose(custom);showCustom=false }
+                        }.keyboardShortcut(.defaultAction).disabled(custom == nil || disabled)
+                    }
+                }.padding(24).frame(width:420).font(LauncherStyle.font(14))
+            }
+    }
+}
 // Updates, the display setting the app owns, what Steam and the games start with, and
 // recovery actions, in tabs. Driver tuning is deliberately absent: FPS, quality and
 // sensitivity live in the games.
@@ -35,9 +92,8 @@ struct SettingsSheet:View {
         VStack(spacing:16) {
             LauncherHeading(title:"Settings",subtitle:"",compact:true)
             tabs
-            // Each tab fits without scrolling; the sheet takes the open tab's height, as the
-            // update sheet takes its step's.
-            VStack(spacing:12) { page }
+            ScrollView { VStack(spacing:12) { page } }
+                .scrollIndicators(.hidden).frame(maxHeight:560)
             if !model.notice.isEmpty { LauncherNotice(text:model.notice) }
             HStack {
                 // Uninstall lives here, always visible and apart from the
@@ -69,10 +125,10 @@ struct SettingsSheet:View {
                 Button("Cancel",role:.cancel) {}
                 Button("Repair",action:model.repair)
             } message: { Text("Steam and your games must be closed. This reinstalls the files this app adds and refreshes the Windows environment. Your games, their settings and your Steam sign-in are kept.") }
-            .alert("Reset display settings?",isPresented:$confirmResetDisplay) {
+            .alert("Reset \(model.selectedGame.title) display settings?",isPresented:$confirmResetDisplay) {
                 Button("Cancel",role:.cancel) {}
                 Button("Reset",action:model.resetDisplay)
-            } message: { Text("Your game will open full screen at \(DisplayResolution.initial(for:main).label)\(model.rememberEachDisplay ? " on this display" : "") the next time it starts. Your graphics quality and FPS settings stay as they are.") }
+            } message: { Text("\(model.selectedGame.title) will open at \(DisplayResolution.initial(for:main).label) the next time it starts. Your graphics quality and FPS settings stay as they are.") }
     }
     /// The categories, each an icon above its name, like the toolbar of a Mac app's Settings.
     private var tabs:some View {
@@ -153,29 +209,23 @@ struct SettingsSheet:View {
                           isOn:$model.autoOpenSteam)
         }
     }
-    /// The game's own Video settings are where players usually change resolution; MacVolvo
-    /// keeps their choice. This shows it, with sizes for players who set it from here.
+    /// Each game's launch size and fullscreen mode are also saved for Steam's Play button.
     private var display:some View {
         LauncherPanel(inset:16) {
             VStack(alignment:.leading,spacing:12) {
                 HStack(alignment:.center,spacing:12) {
                     VStack(alignment:.leading,spacing:2) {
-                        Text("Fullscreen resolution").font(LauncherStyle.font(14,.semibold))
-                        Text("Set it in the game’s Video settings, or here.")
+                        Text("Game launch options").font(LauncherStyle.font(14,.semibold))
+                        Text("Choose a resolution and window mode for each game.")
                             .font(LauncherStyle.font(12)).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
                     }
                     Spacer(minLength:8)
-                    Text(model.resolution.label).font(LauncherStyle.font(13,.medium)).monospacedDigit()
                 }.accessibilityElement(children:.combine)
                 displayOptions
             }
         }
     }
     private var displayOptions:some View {
-        // A size chosen in a game that Settings doesn't list selects nothing here;
-        // the sizes shown are then those in the main display's shape.
-        let current=model.resolution
-        let shape=current.isSupported ? current.shape : DisplayResolution.initial(for:main).shape
         return VStack(alignment:.leading,spacing:12) {
             if let main {
                 mainDisplay(main)
@@ -185,42 +235,31 @@ struct SettingsSheet:View {
             }
             Text("Games open on the main display, the one with the menu bar. To use another, choose Displays… and set it as the main display.")
                 .font(LauncherStyle.font(13)).lineSpacing(3).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
-            Grid(alignment:.leading,horizontalSpacing:12,verticalSpacing:10) {
-                GridRow {
-                    Text("Shape").font(LauncherStyle.font(13)).foregroundStyle(.secondary)
-                    HStack(spacing:8) {
-                        choice("16:10 · MacBook",selected:current.isSupported && current.shape == .macBook) {
-                            model.chooseResolution(DisplayResolution(shape:.macBook,size:current.size))
-                        }
-                        choice("16:9 · Monitor & TV",selected:current.isSupported && current.shape == .monitor) {
-                            model.chooseResolution(DisplayResolution(shape:.monitor,size:current.size))
+            ForEach(AppModel.Game.allCases) { game in
+                VStack(alignment:.leading,spacing:8) {
+                    HStack {
+                        Text(game.title).font(LauncherStyle.font(14,.semibold))
+                        Spacer()
+                        if model.savedGameOptions.contains(game) {
+                            Label("Saved",systemImage:"checkmark.circle.fill").font(LauncherStyle.font(12)).foregroundStyle(.green)
                         }
                     }
-                }
-                GridRow {
-                    Text("Size").font(LauncherStyle.font(13)).foregroundStyle(.secondary)
-                    HStack(spacing:8) {
-                        ForEach(DisplayResolution.Size.allCases,id:\.self) { size in
-                            let option=DisplayResolution(shape:shape,size:size)
-                            choice(option.label,selected:current == option,dimmed:main.map { !$0.fits(option) } ?? false) {
-                                model.chooseResolution(option)
-                            }.help(main.map { $0.fits(option) } ?? true ? "" : "Larger than your main display can show")
-                        }
+                    HStack {
+                        LaunchResolutionPicker(gameName:game.title,resolution:model.resolution(for:game),main:main,
+                                               disabled:model.busy || model.running == .game) { model.chooseResolution($0,for:game) }
+                        Spacer(minLength:8)
+                        Toggle("Fullscreen",isOn:Binding(get:{ model.fullscreen(game) },set:{ model.setFullscreen(game,$0) }))
+                            .toggleStyle(.switch).controlSize(.small).disabled(model.busy || model.running == .game)
                     }
+                    Text(main?.caption(for:model.resolution(for:game)) ?? "Smaller resolutions run faster; larger ones look sharper.")
+                        .font(LauncherStyle.font(12)).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
+                    if game != AppModel.Game.allCases.last { Divider().padding(.top,4) }
                 }
             }
-            Text(caption).font(LauncherStyle.font(13)).lineSpacing(3).fixedSize(horizontal:false,vertical:true)
-            HStack(spacing:6) {
-                if model.displaySaved {
-                    Image(systemName:"checkmark.circle.fill").foregroundStyle(.green).accessibilityHidden(true)
-                    Text("Saved").font(LauncherStyle.font(12,.medium))
-                    Text("·").foregroundStyle(.secondary)
-                }
-                Text(model.rememberEachDisplay ? "Changes save for this display and apply the next time your game starts." : "Changes save as you choose and apply the next time your game starts.")
-                    .foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
-            }.font(LauncherStyle.font(12)).animation(.easeOut(duration:0.15),value:model.displaySaved)
+            Text(model.running == .game ? "Close your game to change its launch options." : "Changes save as you choose. Start the game through MacVolvo once to apply them to Steam Properties too.")
+                .font(LauncherStyle.font(12)).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
             Divider().padding(.vertical,2)
-            SettingSwitch(title:"Remember a resolution for each display",detail:"Your MacBook screen and each monitor open at the resolution you last used on them.",
+            SettingSwitch(title:"Remember a resolution for each display",detail:"Applies to the default size until you choose a resolution for a game.",
                           isOn:Binding(get:{ model.rememberEachDisplay },set:{ model.setRememberEachDisplay($0) }),disabled:model.busy)
         }
     }
@@ -239,25 +278,9 @@ struct SettingsSheet:View {
     static func openDisplaySettings() {
         NSWorkspace.shared.open(URL(string:"x-apple.systempreferences:com.apple.Displays-Settings.extension")!)
     }
-    private func choice(_ title:String, selected:Bool, dimmed:Bool=false, _ action:@escaping ()->Void) -> some View {
-        Button(action:action) {
-            Text(title).font(LauncherStyle.font(13,selected ? .semibold : .medium)).monospacedDigit().lineLimit(1)
-                .padding(.horizontal,12).frame(height:30)
-                .foregroundStyle(selected ? LauncherStyle.ink : (dimmed ? .secondary : .primary))
-                .background(selected ? AnyShapeStyle(LauncherStyle.accent) : AnyShapeStyle(.primary.opacity(0.06)),in:Capsule())
-                .contentShape(Capsule())
-        }.buttonStyle(.plain).disabled(model.busy).accessibilityAddTraits(selected ? .isSelected : [])
-    }
-    /// What the player will see with the current resolution on the main display.
-    private var caption:String {
-        let choice=model.resolution
-        let source=choice.isSupported ? "" : "\(choice.label) was chosen in the game. "
-        guard let main else { return source+"Larger sizes look sharper and lower your frame rate." }
-        return source+main.caption(for:choice)
-    }
     private var resetDisplay:some View {
         LauncherPanel(inset:16) {
-            action("Reset Display Settings…",detail:"If your game opens to a black screen or at the wrong size.",button:"Reset") { confirmResetDisplay=true }
+            action("Reset \(model.selectedGame.title) Display…",detail:"If this game opens to a black screen or at the wrong size.",button:"Reset") { confirmResetDisplay=true }
         }
     }
     /// The game gets the HUD from Steam, which starts it; so the switch changes only
@@ -317,7 +340,10 @@ struct SettingsSheet:View {
     /// Wine picks the sound output once, as the game starts, and keeps it.
     private var sound:some View {
         LauncherPanel(inset:16) {
-            note("Speakers and headphones","Your game keeps the sound output that was selected when it started. Connect your headphones and select them on your Mac before you press Play; to switch later, quit the game and play again.")
+            VStack(alignment:.leading,spacing:12) {
+                note("Speakers and headphones","Your game keeps the sound output that was selected when it started. Connect your headphones and select them on your Mac before you press Play; to switch later, quit the game and play again.")
+                note("Crackling audio","Try 96 kHz in Audio MIDI Setup if your output supports it. This helped on the tested M2 Max.")
+            }
         }
     }
     private func note(_ title:String,_ text:String) -> some View {
@@ -398,7 +424,7 @@ struct HelpSheet:View {
     private let questions:[(question:String, answer:String)]=[
         ("How do I install Counter-Strike 2 or Deadlock?","Choose Open Steam and sign in with your Steam account. Find the game in your Library or the Store and click Install. Once it’s installed, choose it on \(Brand.name)’s Play screen."),
         ("Why do my first matches stutter?","Your Mac prepares each of the game’s graphics effects the first time it appears. The stutters fade as you play, and the prepared graphics are kept for next time."),
-        ("How do I play on an external monitor?","Games open on your main display, the one with the menu bar. In System Settings › Displays, select the monitor and set Use as to Main display. Then choose your monitor’s resolution in the game’s Video settings or in Settings › Display. \(Brand.name) remembers it for that monitor, and your MacBook screen keeps its own."),
+        ("How do I play on an external monitor?","Games open on your main display, the one with the menu bar. In System Settings › Displays, select the monitor and set Use as to Main display. Choose each game’s resolution in Settings › Display, then start it through \(Brand.name) to sync Steam Properties. Sizes that exceed the main display are fitted for that launch."),
         ("Which resolution should I choose?","Your display’s own resolution gives the sharpest picture; a smaller one runs faster and is scaled up to fill the screen. Change it in the game’s Video settings, or in Settings › Display, which shows what each size looks like on your main display."),
         ("The game is black or the wrong size","Quit the game, choose Settings › Display › Reset Display Settings, then play again. The game opens at 1080p; your graphics and FPS settings stay as they are."),
         ("I can’t find the game window","Select the game or Steam in the Dock. If it’s still hidden, check your other desktops."),

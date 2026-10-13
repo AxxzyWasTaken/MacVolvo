@@ -26,7 +26,18 @@ final class AppModel {
         didSet { UserDefaults.standard.set(windowedGames.sorted(),forKey:"windowedGames") }
     }
     func fullscreen(_ game:Game)->Bool { !windowedGames.contains(game.rawValue) }
-    func setFullscreen(_ game:Game,_ on:Bool) { if on { windowedGames.remove(game.rawValue) } else { windowedGames.insert(game.rawValue) } }
+    func setFullscreen(_ game:Game,_ on:Bool) {
+        guard fullscreen(game) != on else { return }
+        if on { windowedGames.remove(game.rawValue) } else { windowedGames.insert(game.rawValue) }
+        saveLaunchOptions(for:game)
+    }
+    /// Per-game choices use the existing display preference until the player changes them.
+    var gameResolutions=[Game:DisplayResolution]()
+    var savedGameOptions=Set<Game>()
+    @ObservationIgnored private var launchOptionSaves=[Game:Task<Void,Never>]()
+    @ObservationIgnored private var launchOptionVersions=[Game:Int]()
+    @ObservationIgnored private var launchOptionFailures=[Game:SetupFailure]()
+    func resolution(for game:Game) -> DisplayResolution { gameResolutions[game] ?? resolution }
     /// Games Steam has installed (worker status), in the worker's order.
     var installedGames=[Game]()
     /// The game this app last started; names the running game on the running screen.
@@ -190,6 +201,20 @@ final class AppModel {
             // Installations from before 1.0 saved only a height, 1920 pixels wide.
             let saved=DisplayResolution(width:state["display_width"] as? Int ?? 1920,height:state["display_height"] as? Int ?? 1200)
             resolution=saved.isSupported ? saved : .standard
+        }
+        let gameOptions=status["game_launch_options"] as? [String:[String:Any]] ?? state["game_launch_options"] as? [String:[String:Any]] ?? [:]
+        let persisted=state["game_launch_options"] as? [String:[String:Any]] ?? [:]
+        for game in Game.allCases where launchOptionSaves[game] == nil {
+            guard let options=gameOptions[game.rawValue] else { continue }
+            if let width=options["width"] as? Int,let height=options["height"] as? Int {
+                let choice=DisplayResolution(width:width,height:height)
+                if choice.isSupported { gameResolutions[game]=choice }
+            }
+            // A previous app kept fullscreen in UserDefaults. Keep that preference
+            // until this game has a worker-owned entry, then use the shared setting.
+            if persisted[game.rawValue] != nil,let on=options["fullscreen"] as? Bool {
+                if on { windowedGames.remove(game.rawValue) } else { windowedGames.insert(game.rawValue) }
+            }
         }
     }
     func perform(_ action: @escaping @MainActor () async throws -> Void) {
@@ -613,7 +638,7 @@ final class AppModel {
         canCancel=false
         _ = try await service.run("onboarded")
         state["onboarding_complete"]=true
-        stage="Waiting for the Steam window";canCancel=true
+        stage="Waiting for the \(game?.title ?? "Steam") window";canCancel=true
         let result: LaunchReadiness.Result
         do {
             result=try await LaunchReadiness.wait(launchEvents:launchEvents,stopped:{ self.stopLaunchWait },session:{
@@ -640,13 +665,13 @@ final class AppModel {
                 NSRunningApplication(processIdentifier:pid)?.activate(options:[])
             }
         case .ready(let pid):
-            existingName="Steam";screen = .running
+            existingName=game?.title ?? "Steam";screen = .running
             // Do not steal focus if the player switched to another app while
             // waiting, or from a sheet they opened (the running screen says
             // where the window is).
             if sheet == nil && NSApp.isActive { NSRunningApplication(processIdentifier:pid)?.activate(options:[]) }
         case .timedOut:
-            notice="No Steam window was detected after 90 seconds. It may still be starting or be on another desktop. Check the Dock, or choose Open Steam to check again."
+            notice="No \(game?.title ?? "Steam") window was detected after 90 seconds. It may still be starting or be on another desktop. Check the Dock, or choose Open Steam to check again."
         case .stopped: break
         }
     }
@@ -667,7 +692,20 @@ final class AppModel {
     func launch() { perform { try await self.openClient() } }
     /// Opens Steam (or uses the open one) and has it start the chosen game.
     func play() { play(selectedGame) }
-    func play(_ game:Game) { selectedGame=game;perform { try await self.openClient(game:game) } }
+    func play(_ game:Game) {
+        selectedGame=game
+        Task {
+            // Saving uses the same worker as launching. Wait before marking the
+            // launch busy, so an option chosen immediately before Play can finish.
+            await launchOptionSaves[game]?.value
+            if launchOptionFailures[game] != nil {
+                saveLaunchOptions(for:game)
+                await launchOptionSaves[game]?.value
+                guard launchOptionFailures[game] == nil else { return }
+            }
+            perform { try await self.openClient(game:game) }
+        }
+    }
     func reopen() {
         guard !busy && clientInstalled && sheet == nil else { return }
         perform {
@@ -768,6 +806,40 @@ final class AppModel {
             }
         }
     }
+    func chooseResolution(_ choice:DisplayResolution,for game:Game) {
+        guard choice.isSupported,choice != resolution(for:game) else { return }
+        gameResolutions[game]=choice
+        saveLaunchOptions(for:game)
+    }
+    private func saveLaunchOptions(for game:Game) {
+        savedGameOptions.remove(game)
+        launchOptionFailures[game]=nil
+        launchOptionSaves[game]?.cancel()
+        let version=(launchOptionVersions[game] ?? 0)+1
+        launchOptionVersions[game]=version
+        let choice=resolution(for:game),on=fullscreen(game)
+        guard !isPreview else { savedGameOptions.insert(game);return }
+        launchOptionSaves[game]=Task {
+            while busy {
+                try? await Task.sleep(for:.milliseconds(200))
+                guard !Task.isCancelled else { return }
+            }
+            guard !Task.isCancelled else { return }
+            busy=true
+            defer {
+                busy=false
+                if launchOptionVersions[game] == version { launchOptionSaves[game]=nil }
+            }
+            do {
+                _ = try await service.run("display",["--game",game.rawValue,"--width",String(choice.width),"--height",String(choice.height),"--fullscreen",on ? "1" : "0"])
+                if launchOptionVersions[game] == version { savedGameOptions.insert(game) }
+            } catch {
+                let failure=error as? SetupFailure ?? SetupFailure(code:"unexpected_setup_error")
+                if launchOptionVersions[game] == version { launchOptionFailures[game]=failure }
+                notice=failure.message
+            }
+        }
+    }
     /// The main display changed while Settings was open: show its own resolution.
     func refreshDisplay() {
         guard !isPreview && !busy else { return }
@@ -819,20 +891,9 @@ final class AppModel {
     /// written again. Graphics quality and FPS are kept. The game must be closed.
     func resetDisplay() {
         let initial=DisplayResolution.initial(for:MainDisplay.current)
-        guard !isPreview else { resolution=initial;notice="Display settings reset.";return }
-        displaySave?.cancel()
-        displaySave=Task {
-            while busy { try? await Task.sleep(for:.milliseconds(200)) }
-            busy=true
-            defer { busy=false }
-            do {
-                _ = try await service.run("display",["--width",String(initial.width),"--height",String(initial.height)])
-                resolution=initial;displaySaved=false
-                notice="Display settings reset. The game opens at \(initial.label) next time."
-            } catch {
-                notice=(error as? SetupFailure ?? SetupFailure(code:"unexpected_setup_error")).message
-            }
-        }
+        gameResolutions[selectedGame]=initial
+        saveLaunchOptions(for:selectedGame)
+        notice="\(selectedGame.title) opens at \(initial.label) next time."
     }
     func uninstallEverything() {
         guard !isPreview else { uninstall = .done(appRemoved:true);return }

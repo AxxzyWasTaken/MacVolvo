@@ -109,7 +109,7 @@
 +static void raw_flush(void)
 +{
 +    int x = raw_pending_x, y = raw_pending_y;  /* truncation keeps the remainder */
-+    unsigned long long now = macdrv_stat_clock();
++    unsigned long long now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
 +
 +    raw_flush_armed = FALSE;
 +    if (!x && !y) return;
@@ -138,7 +138,7 @@
 + * between accumulates and is never dropped. */
 +static void raw_motion(float dx, float dy, unsigned int source)
 +{
-+    unsigned long long now = macdrv_stat_clock();
++    unsigned long long now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
 +
 +    __atomic_store_n(&raw_last_motion, now, __ATOMIC_RELAXED);
 +    raw_stats.moves++;
@@ -498,7 +498,7 @@
 +        // GCMouse is silent, for example for a mouse it does not report.
 +        if (__atomic_load_n(&raw_on, __ATOMIC_ACQUIRE))
 +        {
-+            if (macdrv_stat_clock() - __atomic_load_n(&raw_last_motion, __ATOMIC_RELAXED) < raw_silence)
++            if (clock_gettime_nsec_np(CLOCK_UPTIME_RAW) - __atomic_load_n(&raw_last_motion, __ATOMIC_RELAXED) < raw_silence)
 +            {
 +                mouselookWarpDelta = CGPointZero;
 +                cocoa_stats.pointer_ignored++;

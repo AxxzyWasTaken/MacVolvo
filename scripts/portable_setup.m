@@ -17,6 +17,7 @@
 #include <sys/sysctl.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <math.h>
 #include <unistd.h>
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-function" // MetalFX environment: Overwatch only
@@ -444,64 +445,82 @@ static NSMutableDictionary *clientEnvironment(NSMutableDictionary *env, BOOL hud
 }
 /* Opens Steam; with a game (play), Steam starts it (-applaunch). A running Steam receives
  * the game from a second steam.exe, which hands it over and exits. */
-static void launchClient(BOOL diagnostic, NSString *play, BOOL fullscreen, BOOL hud, BOOL gameMode) {
+static void launchClient(BOOL diagnostic, NSString *play, NSString *fullscreen, BOOL hud, BOOL gameMode) {
     requireRosetta();
     NSString *engine=runtime();if(![fm fileExistsAtPath:clientPath()])fail(@"battlenet_not_installed");
     const MVGame *game=play ? mvGame(play) : NULL;
     if(play && !game)fail(@"unknown_game");
+    if(fullscreen && ![fullscreen isEqual:@"0"] && ![fullscreen isEqual:@"1"])fail(@"invalid_arguments");
     NSArray *existing=sessionProcesses();
     if(diagnostic && existing.count)fail(@"close_game_before_maintenance");
-    // A game must start in a Wine session that began with the displays as they are now
-    // (displaySignature). Steam open from before a display change is closed and opened
-    // again; a running game is left alone.
     NSString *displays=displaySignature(),*sessionDisplays=state()[@"session_displays"];
     BOOL displaysChanged=displays && ![displays isEqual:sessionDisplays];
     BOOL running=NO;for(NSDictionary *p in existing)running|=[p[@"kind"] isEqual:@"game"];
-    if(existing.count && !running && sessionDisplays && displaysChanged) {
-        event(@"displays_changed",nil);closeClient(@"close_game_before_maintenance");existing=@[];
+    if(running) {focusSession(existing);return;}
+    if(game && fullscreen) {
+        NSDictionary *choice=gameLaunchOptions(NO)[game->key];
+        if([choice[@"fullscreen"] boolValue]!=[fullscreen isEqual:@"1"])
+            configureGameLaunchOptions(game->key,[choice[@"width"] integerValue],[choice[@"height"] integerValue],fullscreen);
     }
-    NSInteger width,height;NSString *source;nextResolution(&width,&height,&source,!existing.count);
-    NSInteger gameWidth=width,gameHeight=height;fittedResolution(&gameWidth,&gameHeight);
-    NSMutableArray *client=[@[clientPath(),@"-no-cef-sandbox"] mutableCopy];
+    NSDictionary *choices=gameLaunchOptions(NO),*fitted=gameLaunchOptions(YES),*defaults=steamLaunchDefaults(fitted);
+    BOOL needsOptions=NO;
+    if(!steamLaunchOptionsNeedUpdate(defaults,&needsOptions))fail(@"steam_launch_options_invalid");
+    NSDictionary *s=state();
+    BOOL environmentChanged=![s[@"session_hud"] isEqual:@(hud)] || ![s[@"session_game_mode"] isEqual:@(gameMode)];
+    // Steam owns its children's environment and cached launch options. Reopen an idle
+    // client cleanly when those change; never edit a live client's account config.
+    if(existing.count && (needsOptions || (sessionDisplays && displaysChanged) || environmentChanged)) {
+        event(displaysChanged?@"displays_changed":@"launch_options_changed",nil);
+        closeClient(@"close_game_before_maintenance");existing=@[];
+    }
+    if(!existing.count) {
+        endSession(engine);
+        if(!configureSteamLaunchOptions(defaults))fail(@"steam_launch_options_write_failed");
+    }
+    if(!configureDeadlockRenderer()) {
+        if(game && [game->key isEqual:@"deadlock"])fail(@"game_renderer_write_failed");
+        event(@"game_renderer_configuration_skipped",@{@"game":@"deadlock"});
+    }
     if(game) {
-        // Windowed keeps the chosen size as the window's (Settings › the game's Fullscreen).
-        [client addObjectsFromArray:@[@"-applaunch",game->appID,@"-nojoy",fullscreen?@"-fullscreen":@"-windowed",
-            @"-w",[NSString stringWithFormat:@"%ld",(long)gameWidth],@"-h",[NSString stringWithFormat:@"%ld",(long)gameHeight]]];
-        if(game->options.length)[client addObjectsFromArray:[game->options componentsSeparatedByString:@" "]];
+        NSDictionary *choice=choices[game->key],*actual=fitted[game->key];
+        if(![choice[@"width"] isEqual:actual[@"width"]] || ![choice[@"height"] isEqual:actual[@"height"]])
+            event(@"display_fitted",@{@"game":game->key,@"width":actual[@"width"],@"height":actual[@"height"],@"chosen_width":choice[@"width"],@"chosen_height":choice[@"height"]});
     }
-    if(focusSession(existing)) {
-        // The game reads its default microphone when it starts; one already running keeps its own.
-        if(!running)configureVoiceMicrophone(engine,nil,YES,NO);
-        // Steam already open carries its own environment; this hands over the game only.
-        if(game && !running) {
-            [client insertObject:@"-noverifyfiles" atIndex:1];
-            task(join(engine,@"bin/wine"),client,clientEnvironment(wineEnv(engine),hud,gameMode),@"steam-play.log");
-        }
-        if(!running)task(NSProcessInfo.processInfo.arguments[0],@[@"watch",@"--root",root],nil,[NSString stringWithFormat:@"client-monitor-%d.log",getpid()]);
-        return;
-    }
-    // Steam's update service can outlive the client. A session it keeps alive from before a
-    // display change is ended.
-    if(displaysChanged)endSession(engine);
-    configureRetina();
-    if(gameWidth!=width || gameHeight!=height)
-        event(@"display_fitted",@{@"width":@(gameWidth),@"height":@(gameHeight),@"chosen_width":@(width),@"chosen_height":@(height)});
     NSString *config=[NSString stringWithContentsOfFile:join(engine,@"config/dxmt.conf") encoding:NSUTF8StringEncoding error:nil];
     if(!config)fail(@"runtime_missing");
-    config=gamesProfile(canvasProfile(config,gameWidth,gameHeight));
+    NSDictionary *base=fitted[@"cs2"];
+    config=gamesProfile(canvasProfile(config,[base[@"width"] integerValue],[base[@"height"] integerValue]),fitted);
     if(![config writeToFile:join(root,@"dxmt.conf") atomically:YES encoding:NSUTF8StringEncoding error:nil])fail(@"settings_write_failed");
     makeGameApps(engine);
+    NSMutableArray *client=[@[clientPath(),@"-no-cef-sandbox"] mutableCopy];
+    if(game) {
+        // The same persisted settings apply to both Library and app launches.
+        // Keep the browser behind the game to avoid a startup focus transition.
+        [client addObjectsFromArray:@[@"-silent",@"-applaunch",game->appID]];
+    }
+    if(existing.count) {
+        configureVoiceMicrophone(engine,nil,YES,NO);
+        if(game) {
+            [client insertObject:@"-noverifyfiles" atIndex:1];
+            task(join(engine,@"bin/wine"),client,clientEnvironment(wineEnv(engine),hud,gameMode),[NSString stringWithFormat:@"steam-play-%@.log",NSUUID.UUID.UUIDString]);
+            event(@"game_launch_requested",@{@"game":game->key});
+        } else focusSession(existing);
+        return;
+    }
+    configureRetina();
     // Setup applies these; a launch puts back any that went missing. The voice step below
     // waits for Wine's server.
     configureProxy(engine,proxyDetectionChosen());
     configureScaling(engine);
     if(steamWindowFix(engine))[client insertObject:@"-noverifyfiles" atIndex:1];
     configureVoiceMicrophone(engine,nil,YES,YES);
-    if(displays) {NSMutableDictionary *s=state();s[@"session_displays"]=displays;writeJSON(s,join(root,@"state.json"));}
+    NSMutableDictionary *session=state();
+    if(displays)session[@"session_displays"]=displays;
+    session[@"session_hud"]=@(hud);session[@"session_game_mode"]=@(gameMode);writeJSON(session,join(root,@"state.json"));
     NSDictionary *env=clientEnvironment(diagnostic?diagnosticEnvironment(engine):wineEnv(engine),hud,gameMode);
-    NSTask *p=task(join(engine,@"bin/wine"),client,env,@"steam.log");
+    NSTask *p=task(join(engine,@"bin/wine"),client,env,[NSString stringWithFormat:@"steam-%@.log",NSUUID.UUID.UUIDString]);
     saveStage(@"battlenet_started");event(@"battlenet_open",@{@"pid":@(p.processIdentifier)});
-    task(NSProcessInfo.processInfo.arguments[0],@[@"watch",@"--root",root],nil,[NSString stringWithFormat:@"client-monitor-%d.log",getpid()]);
+    if(game)event(@"game_launch_requested",@{@"game":game->key});
 }
 
 /* Settings › Advanced. Steam and the games carry both settings from when they start,
@@ -523,9 +542,8 @@ static void advancedSetting(NSString *name, BOOL on, BOOL apply) {
     NSMutableDictionary *s=state();s[name]=@(on);writeJSON(s,join(root,@"state.json"));
     event(@"setting_saved",@{@"name":name,@"enabled":@(on)});
 }
-// Refuses while a game runs (failing with gameRunning). An owned
-// Battle.net client is closed the way the launch monitor closes it (SIGTERM,
-// then wineserver -k).
+// Refuses while a game runs. Steam must flush its launch options before any
+// maintenance edits localconfig.vdf; use its normal shutdown request.
 static void closeClient(NSString *gameRunning) {
     if(!(matches(state()[@"active_runtime"],@"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$") && [fm fileExistsAtPath:join(join(join(root,@"runtimes"),state()[@"active_runtime"]),@"runtime.json")]))return;
     NSString *engine=runtime();BOOL closed=NO;
@@ -534,8 +552,10 @@ static void closeClient(NSString *gameRunning) {
         NSArray *rows=sessionProcesses();NSMutableArray *clients=[NSMutableArray array];
         for(NSDictionary *p in rows) {if([p[@"kind"] isEqual:@"game"])fail(gameRunning);[clients addObject:p];}
         if(!clients.count) {closed=YES;break;}
-        if(attempt==0) {event(@"closing_client",nil);for(NSDictionary *p in clients)kill([p[@"pid"] intValue],SIGTERM);}
-        else if(attempt==10)waitTask(task(join(engine,@"bin/wineserver"),@[@"-k"],wineEnv(engine),@"client-stop.log"),15);
+        if(attempt==0) {
+            event(@"closing_client",nil);
+            waitTask(task(join(engine,@"bin/wine"),@[clientPath(),@"-shutdown"],wineEnv(engine),@"steam-shutdown.log"),10);
+        }
         [NSThread sleepForTimeInterval:1];
     }
     if(!closed)fail(@"client_close_failed");
@@ -582,7 +602,7 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
             NSInteger width,height;NSString *source;nextResolution(&width,&height,&source,NO);
             NSMutableDictionary *next=[@{@"width":@(width),@"height":@(height),@"from_game":@([source isEqual:@"game"]),@"per_display":@(displayMemory(state()))} mutableCopy];
             if(mainScreen())next[@"screen"]=mainScreen();
-            event(@"status",@{@"state":state(),@"display_next":next,@"battlenet_installed":@([fm fileExistsAtPath:clientPath()]),@"game_installed":@((BOOL)(installedGames().count>0)),@"games":installedGames(),@"nexon_build":@NO,@"free_bytes":@(freeBytes())});
+            event(@"status",@{@"state":state(),@"display_next":next,@"game_launch_options":gameLaunchOptions(NO),@"battlenet_installed":@([fm fileExistsAtPath:clientPath()]),@"game_installed":@((BOOL)(installedGames().count>0)),@"games":installedGames(),@"nexon_build":@NO,@"free_bytes":@(freeBytes())});
         }
         else if([command isEqual:@"onboarded"]) { NSMutableDictionary *s=state();s[@"onboarding_complete"]=@YES;writeJSON(s,join(root,@"state.json"));event(@"onboarding_complete",nil); }
         else if([command isEqual:@"session"])event(@"session",@{@"processes":sessionProcesses()});
@@ -591,8 +611,9 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
             // 0.1.x apps sent only a height (1080 or 1200, 1920 wide).
             NSString *width=options[@"width"] ?: @"1920",*height=options[@"height"] ?: @"";
             if(!matches(width,@"^[0-9]{3,5}$") || !matches(height,@"^[0-9]{3,5}$") ||
-               !supportedResolution(width.integerValue,height.integerValue))fail(@"unsupported_resolution");
-            configureDisplay(width.integerValue,height.integerValue);
+               !gameResolution(width.integerValue,height.integerValue))fail(@"unsupported_resolution");
+            if(options[@"game"])configureGameLaunchOptions(options[@"game"],width.integerValue,height.integerValue,options[@"fullscreen"]);
+            else configureDisplay(width.integerValue,height.integerValue);
         }
         else if([command isEqual:@"display-memory"]) {
             // Settings › Remember a resolution for each display.
@@ -636,9 +657,9 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
         else if([command isEqual:@"launch"]) {
             NSString *game=options[@"game"];
             if(!game && [options[@"play"] isEqual:@"1"])game=installedGames().firstObject ?: @"cs2";
-            launchClient(NO,game,![options[@"fullscreen"] isEqual:@"0"],[options[@"metal-hud"] isEqual:@"1"],![options[@"game-mode"] isEqual:@"0"]);
+            launchClient(NO,game,options[@"fullscreen"],[options[@"metal-hud"] isEqual:@"1"],![options[@"game-mode"] isEqual:@"0"]);
         }
-        else if([command isEqual:@"diagnostic-launch"])launchClient(YES,nil,YES,[options[@"metal-hud"] isEqual:@"1"],![options[@"game-mode"] isEqual:@"0"]);
+        else if([command isEqual:@"diagnostic-launch"])launchClient(YES,options[@"game"],options[@"fullscreen"],[options[@"metal-hud"] isEqual:@"1"],![options[@"game-mode"] isEqual:@"0"]);
         // Support and tests: what a launch with --enabled 0|1 (and --sharpening) sets up for MetalFX
         // upscaling (portable_metalfx.h); --apply 0 only reports.
         else if([command isEqual:@"metalfx"]) {

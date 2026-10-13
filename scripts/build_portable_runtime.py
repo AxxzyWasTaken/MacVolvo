@@ -110,7 +110,7 @@ def build(work, tools, headers, jobs):
     # 2026-09-25 and 2026-09-26. It is inert unless the app lists the game in
     # WINEMAC_MOUSELOOK.
     mouselook = ROOT / 'patches/wine-mouselook.patch'
-    if sha(mouselook) != '4e9d4ab2aff6ec38b03100d4802d2764efe1e33caf151cdb4c5de7a8dfa3dfdb':
+    if sha(mouselook) != '343f993f1f368500b51ac1fa13ffb3d3cbb3433a15c1b04947153cb1f9858545':
         raise RuntimeError('The accepted mouselook patch changed')
     apply_once(wine, mouselook)
     directory_patch = ROOT / 'patches/wine-portable-directory-boolean.patch'

@@ -1,33 +1,46 @@
 import Foundation
 
 // The fullscreen resolutions and the main-display rules Settings shows: shapes,
-// sizes, which choices fit a display as Wine sees it, and what the game uses when
-// a choice is too large. The worker applies the same fit rule at launch
-// (portable_preferences.h). Run from the repository root to also check the list
-// against docs/candidate-parity-contract.json.
+// common/custom sizes, desktop modes and pointer-safe fitting. The worker applies
+// the same proportional fit at launch. The original contract defaults stay available.
 @main struct DisplayOptionsTests {
     static func r(_ width:Int,_ height:Int) -> DisplayResolution { DisplayResolution(width:width,height:height) }
     static func main() throws {
         let sizes=DisplayResolution.all.map { [$0.width,$0.height] }
-        precondition(Set(sizes.map { "\($0[0])x\($0[1])" }) == ["1920x1200","2560x1600","3840x2400","1920x1080","2560x1440","3840x2160"])
+        let legacy=DisplayResolution.legacy.map { [$0.width,$0.height] }
+        precondition(Set(legacy.map { "\($0[0])x\($0[1])" }) == ["1920x1200","2560x1600","3840x2400","1920x1080","2560x1440","3840x2160"])
         if let data=FileManager.default.contents(atPath:"docs/candidate-parity-contract.json"),
            let contract=try JSONSerialization.jsonObject(with:data) as? [String:Any] {
             let listed=(contract["supported_resolutions"] as! [[Int]]).map { "\($0[0])x\($0[1])" }
-            precondition(Set(listed) == Set(sizes.map { "\($0[0])x\($0[1])" }),"the app and the contract offer different resolutions")
+            precondition(Set(listed).isSubset(of:Set(sizes.map { "\($0[0])x\($0[1])" })),"an original contract resolution disappeared")
             precondition(contract["default_resolution"] as! [Int] == [DisplayResolution.standard.width,DisplayResolution.standard.height])
         }
         for option in DisplayResolution.all {
-            precondition(DisplayResolution(shape:option.shape,size:option.size) == option)
             precondition(option.isSupported)
         }
+        precondition(Set(DisplayResolution.all).count == DisplayResolution.all.count)
+        for option in DisplayResolution.legacy { precondition(DisplayResolution(shape:option.shape,size:option.size) == option) }
         precondition(r(1920,1200).shape == .macBook && r(2560,1440).shape == .monitor && r(3840,2160).size == .ultra)
-        precondition(!r(2560,1080).isSupported && !r(1920,1440).isSupported)
+        for size in [r(640,480),r(1280,960),r(1440,1080),r(1920,1440),r(1280,720),r(1680,1050),r(2560,1080),r(3440,1440),r(5120,1440)] {
+            precondition(DisplayResolution.all.contains(size))
+        }
+        precondition(r(16384,16384).isSupported && r(2304,1440).isSupported)
+        for invalid in [r(639,480),r(640,479),r(16385,1080),r(1920,16385),r(0,0)] { precondition(!invalid.isSupported) }
+        precondition(DisplayResolution.parsed(width:" 1440 ",height:"1080") == r(1440,1080))
+        precondition(DisplayResolution.parsed(width:"1920.5",height:"1080") == nil)
+        precondition(DisplayResolution.parsed(width:"1920",height:"0") == nil)
+        precondition(r(1440,1080).aspect == "4:3" && r(1280,1024).aspect == "5:4" && r(1000,1000).aspect == "1:1")
+        let custom=r(2024,1136)
+        precondition(!custom.isPreset && DisplayResolution.choices(on:nil,keeping:custom).contains(custom))
+        let grouped=DisplayResolution.grouped(DisplayResolution.choices(on:nil,keeping:custom))
+        precondition(grouped.first?.aspect == "4:3")
+        precondition(grouped.first?.resolutions.contains(r(1440,1080)) == true)
 
         // 14-inch MacBook Pro: 1512 x 982 points at 2x; fullscreen apps get 3024 x 1890 below the camera.
         let macBook=MainDisplay(name:"Built-in Retina Display",builtIn:true,points:CGSize(width:1512,height:982),pixels:CGSize(width:3024,height:1890))
         precondition(macBook.shape == .macBook && macBook.aspect == "16:10")
         precondition(macBook.fits(r(2560,1600)) && macBook.fits(r(2560,1440)) && !macBook.fits(r(3840,2160)) && !macBook.fits(r(3840,2400)))
-        precondition(macBook.fitted(r(3840,2400)) == r(2560,1600) && macBook.fitted(r(3840,2160)) == r(2560,1440))
+        precondition(macBook.fitted(r(3840,2400)) == r(3024,1890) && macBook.fitted(r(3840,2160)) == r(3024,1701))
         precondition(macBook.fitted(r(1920,1200)) == r(1920,1200))
         // 13-inch MacBook Air: 1470 x 956 points.
         let air=MainDisplay(name:"Built-in",builtIn:true,points:CGSize(width:1470,height:956),pixels:CGSize(width:2940,height:1838))
@@ -35,16 +48,20 @@ import Foundation
         // A 1440p monitor at 1x (the owner's LG): Wine doubles it, so every size fits.
         let monitor=MainDisplay(name:"LG ULTRAGEAR",builtIn:false,points:CGSize(width:2560,height:1440),pixels:CGSize(width:2560,height:1440))
         precondition(monitor.shape == .monitor && monitor.aspect == "16:9" && monitor.size == "2560 × 1440")
-        precondition(DisplayResolution.all.allSatisfy(monitor.fits))
+        precondition(DisplayResolution.legacy.allSatisfy(monitor.fits))
         // A 4K monitor at its default 2x ("looks like 1920 x 1080").
         let uhd=MainDisplay(name:"4K",builtIn:false,points:CGSize(width:1920,height:1080),pixels:CGSize(width:3840,height:2160))
-        precondition(uhd.fits(r(3840,2160)) && !uhd.fits(r(3840,2400)) && uhd.fitted(r(3840,2400)) == r(2560,1600))
+        precondition(uhd.fits(r(3840,2160)) && !uhd.fits(r(3840,2400)) && uhd.fitted(r(3840,2400)) == r(3456,2160))
         // Other shapes are named and treated as the nearer of the two.
         let wide=MainDisplay(name:"Ultrawide",builtIn:false,points:CGSize(width:3440,height:1440),pixels:CGSize(width:3440,height:1440))
         precondition(wide.aspect == "21:9" && wide.shape == .monitor)
-        // Nothing fits a tiny display: the choice is kept (the worker does the same).
+        // Small desktop sizes retain the chosen aspect instead of switching to 16:10.
         let tiny=MainDisplay(name:"Tiny",builtIn:false,points:CGSize(width:800,height:500),pixels:CGSize(width:800,height:500))
-        precondition(tiny.fitted(r(1920,1080)) == r(1920,1080))
+        precondition(tiny.fitted(r(1920,1080)) == r(1600,900))
+        // An extreme ratio would scale below the minimum height: use the fitted default.
+        precondition(tiny.fitted(r(16384,480)) == r(1600,1000))
+        let impossible=MainDisplay(name:"Small",builtIn:false,points:CGSize(width:200,height:150),pixels:CGSize(width:400,height:300))
+        precondition(impossible.fitted(r(1920,1080)) == r(1920,1080))
 
         // A new installation, and Troubleshooting's reset: 1080p in the main display's shape.
         precondition(DisplayResolution.initial(for:macBook) == r(1920,1200) && DisplayResolution.initial(for:monitor) == r(1920,1080))
@@ -63,7 +80,7 @@ import Foundation
         // Settings' sizes keep their wording.
         precondition(monitor.caption(for:r(1920,1200)).hasPrefix("Your main display is wider than 16:10, so the picture has black bars at the sides."))
         precondition(macBook.caption(for:r(1920,1080)).hasPrefix("Your main display is taller than 16:9, so the picture has black bars above and below."))
-        precondition(macBook.caption(for:r(3840,2400)).hasPrefix("Too large for this main display: the game uses 2560 × 1600"))
+        precondition(macBook.caption(for:r(3840,2400)).hasPrefix("Too large for this main display: the game uses 3024 × 1890"))
         precondition(macBook.caption(for:r(1920,1200)).hasPrefix("Scaled up to fill your main display."))
         precondition(monitor.caption(for:r(2560,1440)).hasPrefix("Matches your main display exactly"))
         precondition(monitor.caption(for:r(3840,2160)).hasPrefix("Larger than your main display"))
@@ -112,6 +129,9 @@ import Foundation
         let airDefault=MainDisplay(name:"Built-in",builtIn:true,points:CGSize(width:1470,height:956),scale:2,cameraInset:956.0*64/1664,refresh:60,modes:airModes)
         precondition(airDefault.scalingNote == nil && airDefault.pixels == CGSize(width:2560,height:1600))
         precondition(airDefault.caption(for:r(2560,1600)).hasPrefix("Matches your main display exactly"))
+        let airChoices=DisplayResolution.choices(on:airDefault,keeping:custom)
+        precondition(airChoices.contains(r(2560,1600)) && airChoices.contains(r(2560,1664)) && airChoices.contains(custom))
+        precondition(Set(airChoices).count == airChoices.count)
         // No native mode reported (a virtual or unusual display): today's behaviour, no note.
         let unknown=MainDisplay(name:"Virtual",builtIn:false,points:CGSize(width:1920,height:1080),scale:2,modes:[m(1920,1080,3840,2160,60)])
         precondition(unknown.native == nil && unknown.pixels == CGSize(width:3840,height:2160) && unknown.scalingNote == nil)

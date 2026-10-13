@@ -28,11 +28,12 @@ static NSMutableDictionary *diagnosticEnvironment(NSString *engine) {
     NSString *folder=join(root,join(@"logs",[@"parity-" stringByAppendingString:NSUUID.UUID.UUIDString]));
     mkdirs(folder);
     NSMutableDictionary *env=wineEnv(engine);
-    for(NSString *kind in @[@"FRAME",@"GEOMETRY",@"WINDOW",@"DISPLAY",@"CANVAS"]) {
+    for(NSString *kind in @[@"FRAME",@"GEOMETRY",@"WINDOW",@"DISPLAY",@"CANVAS",@"SHADER",@"PIPELINE_CACHE",@"RESOURCE"]) {
         NSString *path=join(folder,kind.lowercaseString);
-        if([@[@"FRAME",@"GEOMETRY",@"WINDOW"] containsObject:kind])path=[@"Z:" stringByAppendingString:[path stringByReplacingOccurrencesOfString:@"/" withString:@"\\"]];
+        if([@[@"FRAME",@"GEOMETRY",@"WINDOW",@"SHADER",@"RESOURCE"] containsObject:kind])path=[@"Z:" stringByAppendingString:[path stringByReplacingOccurrencesOfString:@"/" withString:@"\\"]];
         env[[NSString stringWithFormat:@"DXMT_%@_LOG",kind]]=path;
     }
+    env[@"WINEMAC_INPUT_STATS"]=join(folder,@"input");
     writeJSON(parityReport(engine,env),join(folder,@"launch.json"));
     event(@"diagnostics_started",@{@"folder":folder});
     return env;

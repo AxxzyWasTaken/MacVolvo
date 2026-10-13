@@ -325,13 +325,17 @@ struct GamePicker: View {
                 ForEach(AppModel.Game.allCases) { game in
                     VStack(alignment:.leading,spacing:8) {
                         tile(game)
-                        // Steam's own Play button skips this; start games here.
+                        LaunchResolutionPicker(gameName:game.title,resolution:model.resolution(for:game),main:MainDisplay.current,
+                                               disabled:model.busy || model.running == .game) { model.chooseResolution($0,for:game) }
+                            .font(LauncherStyle.font(12)).padding(.leading,4)
                         Toggle("Fullscreen",isOn:Binding(get:{ model.fullscreen(game) },set:{ model.setFullscreen(game,$0) }))
                             .toggleStyle(.switch).controlSize(.small).font(LauncherStyle.font(12)).padding(.leading,4)
-                            .disabled(model.busy).accessibilityLabel("\(game.title) fullscreen")
+                            .disabled(model.busy || model.running == .game).accessibilityLabel("\(game.title) fullscreen")
                     }
                 }
             }
+            Text("Launch options also apply when you press Play in Steam.")
+                .font(LauncherStyle.font(12)).foregroundStyle(.secondary)
             if !model.installedGames.contains(model.selectedGame) {
                 LauncherNotice(text:"\(model.selectedGame.title) isn’t installed yet. Open Steam, find it in your Library (or the Store) and click Install. It appears here once it’s installed.",symbol:"arrow.down.circle")
             }
