@@ -5,11 +5,11 @@
 <h3 align="center">Counter-Strike 2 and Deadlock on your Mac.</h3>
 
 <p align="center">
-It is the year 2026 CE, the Lord Gaben of Volvo hath not giveth Macintosh Deadlock, nor Counter Strike 2.
+The year is 2026 CE. Lord Gaben of house Volvo hath not giveth us plebeians on Macintosh Deadlock, nor Counter Strike 2.
 
 So I said fuck Gaben (Peace be upon him) and prayed to Mechanicus Claude Opus instead.
 
-MacVolvo is a free, open-source app for playing Valve's Source 2 games on Apple Silicon, built on <a href="https://github.com/AsherJN/recall">Recall</a>.</p>
+MacVolvo is a free, open-source app for playing Valve's Source 2 games on Apple Silicon, built on optimizations from <a href="https://github.com/AsherJN/recall">Recall</a>.</p>
 
 ---
 
