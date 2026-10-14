@@ -5,8 +5,10 @@ import AppKit
 // and up) are set in Chakra Petch, bundled under SIL OFL 1.1 (Resources/Fonts); smaller
 // regular text stays in the system font, which reads best at body sizes.
 enum LauncherStyle {
-    static let accent=Color(red:1,green:0.42,blue:0.08)
-    static let ink=Color(red:0.06,green:0.06,blue:0.07)
+    static let accent=Color.primary
+    static let ink=Color(nsColor:NSColor(name:nil) { appearance in
+        appearance.bestMatch(from:[.darkAqua,.aqua]) == .darkAqua ? .black : .white
+    })
     static let contentWidth:CGFloat=440
     static let radius:CGFloat=12
     private static let displayFonts:Bool={
@@ -24,23 +26,16 @@ enum LauncherStyle {
         return .custom(face,fixedSize:size*1.08)
     }
     static func ground(_ scheme:ColorScheme) -> Color {
-        scheme == .dark ? Color(red:0.055,green:0.06,blue:0.07) : Color(red:0.955,green:0.955,blue:0.95)
+        scheme == .dark ? .black : .white
     }
     static func surface(_ scheme:ColorScheme) -> Color {
-        scheme == .dark ? Color(red:0.105,green:0.11,blue:0.125) : .white
+        scheme == .dark ? Color(white:0.08) : Color(white:0.96)
     }
 }
 struct LauncherBackground: View {
     @Environment(\.colorScheme) private var scheme
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     var body:some View {
         LauncherStyle.ground(scheme)
-            .overlay(alignment:.top) {
-                if !reduceTransparency {
-                    RadialGradient(colors:[LauncherStyle.accent.opacity(scheme == .dark ? 0.10 : 0.13),.clear],center:.center,startRadius:10,endRadius:240)
-                        .frame(width:520,height:420).offset(y:-90)
-                }
-            }
             .ignoresSafeArea().allowsHitTesting(false).accessibilityHidden(true)
     }
 }
@@ -115,7 +110,7 @@ struct LauncherCancelAction: View {
     let action:()->Void
     var body:some View {
         Button(action:action) { Text(title).font(LauncherStyle.font(15,.semibold)) }
-            .buttonStyle(LauncherActionStyle(fill:Color(red:0.85,green:0.18,blue:0.16),text:.white))
+            .buttonStyle(LauncherActionStyle())
     }
 }
 private struct LauncherActionStyle: ButtonStyle {

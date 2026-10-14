@@ -72,7 +72,8 @@ struct Wordmark:View {
     @Environment(\.colorScheme) private var scheme
     var body:some View {
         Image(nsImage:scheme == .dark ? ProjectArtwork.wordmarkDark : ProjectArtwork.wordmark)
-            .resizable().interpolation(.high).scaledToFit().frame(height:height)
+            .renderingMode(.template).resizable().interpolation(.high)
+            .scaledToFit().frame(height:height).foregroundStyle(.primary)
             .overlay(alignment:.leading) {
                 if let badge {
                     Color.clear.frame(width:height,height:height).overlay(alignment:.bottomTrailing) {
@@ -87,7 +88,7 @@ struct Wordmark:View {
             .accessibilityElement().accessibilityLabel(Brand.name).accessibilityAddTraits(.isHeader)
     }
 }
-/// "by @haeli05", under the wordmark and in About; opens the author's GitHub.
+/// "by @haeli05", in About; opens the author's GitHub.
 struct AuthorLink:View {
     var body:some View {
         Link(destination:Brand.authorPage) {

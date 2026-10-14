@@ -329,3 +329,53 @@ No additional speculative input-state patch was made; test the corrected timer
 across a complete match before declaring that symptom resolved. CS2 startup
 produced frames on the new runtime; no fight or sustained-collapse trace has
 yet established the remaining cause.
+
+### October 14: captured Deadlock fullscreen deadlock
+
+The owner confirmed a live black screen with music (native PID 59180). Its game
+thread was stuck in ChangeDisplaySettings -> OnMainThread -> query_resize_start
+-> sync_window_min_max_info -> monitor DPI -> display mutex. The pinned win32u
+holds that non-recursive mutex across the driver display change; the Cocoa wait
+was re-entering it through a resize query. The sample and successful/failed
+presentation traces are retained in the installed logs folder
+`parity-23A89179-10EA-46D5-9E3B-71551EE3C835`.
+
+`wine-winemac-activation.patch` now sends resize-start queries with
+`WineQueryNoPreemptWait`, deferring them to the normal event pump. The regression
+test compiles the real patched resize method and wait loop; the old-policy
+negative control detects the self-lock, while the fix delivers after unlocking.
+The replacement winemac exports and dependencies match the previous driver.
+Runtime `phase2-20261014.1`, app 0.9 build 3. Build/provenance directories:
+`runtime/build/winemac-display-query`, `runtime/build/display-query`, and
+`runtime/build/v0.9-display-query`. This is a targeted repair for the captured
+startup deadlock; post-match mouse failure and CS2 combat spikes remain separate.
+
+Candidate validation completed: 13 focused Python checks passed (including the
+new deadlock test and its old-policy control), native app build passed, and all
+228 bundle files match its build proof. The candidate bundle reports 0.9 build 3
+and embeds phase2-20261014.1. Activation is pending a safe game shutdown: the
+owner started another game on phase2-20261013.1 while the candidate was building.
+Do not treat the build result as a successful real-game launch of the fix.
+
+The subsequent recurrence was still using phase2-20261013.1 (PID 60033's mapped
+winemac path confirmed it); it was not a test of the candidate. After the game
+closed, phase2-20261014.1 was installed. The owner also requested removal of the
+main-screen author link and a black-and-white appearance. The main-screen credit
+is removed (About retains it), backgrounds are solid, accent/contrast colors
+adapt between black and white, and the wordmark uses its existing alpha as a
+template. The replacement raster icon was edited with the imagegen skill to
+remove its orange dot and gradient, preserving the crosshair design.
+
+Delivery completed: `runtime/build/v0.9-bw-final/MacVolvo.app` passed the full
+build; all 228 files were verified against its proof and again after copying to
+`runtime/build/release/MacVolvo.app`. The prior app is retained at
+`runtime/build/release/MacVolvo-before-build3.app`. The running launcher is the
+release-path build 3; its main window was visually inspected for the monochrome
+background, wordmark, contrasting action text, and removed author line.
+
+Active and prepared runtime both read phase2-20261014.1. Deadlock PID 70792 mapped
+that runtime's new winemac driver and advanced beyond startup: its diagnostic
+capture `parity-45A25F36-B750-4A17-92E4-14ED17735C8D` recorded 2,625 frame-boundary
+intervals and 254 valid native presentation callbacks at the check. The native
+sample no longer showed the captured display-lock self-deadlock. This is one
+successful startup, not repeated-launch or post-match qualification.

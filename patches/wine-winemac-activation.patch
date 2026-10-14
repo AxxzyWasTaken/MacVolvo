@@ -433,10 +433,9 @@ index 23ecd6d..b4520d0 100644
  
  @end
 diff --git a/dlls/winemac.drv/cocoa_window.m b/dlls/winemac.drv/cocoa_window.m
-index 94fe12a..96c91df 100644
 --- a/dlls/winemac.drv/cocoa_window.m
 +++ b/dlls/winemac.drv/cocoa_window.m
-@@ -528,6 +528,16 @@ - (void) updateLayer
+@@ -528,6 +528,16 @@
          if (window.closing)
              return;
  
@@ -453,7 +452,20 @@ index 94fe12a..96c91df 100644
          imageRect = layer.bounds;
          imageRect.origin.x *= layer.contentsScale;
          imageRect.origin.y *= layer.contentsScale;
-@@ -1372,9 +1382,16 @@ - (void) setMacDrvState:(const struct macdrv_window_state*)state
+@@ -1292,7 +1302,11 @@
+         query->type = QUERY_RESIZE_START;
+         query->window = (macdrv_window)[self retain];
+ 
+-        [self.queue query:query timeout:0.3];
++        /* sync_window_min_max_info reads the monitor DPI.  Do not run it
++         * inside OnMainThread's query pump: ChangeDisplaySettings can be
++         * waiting there while win32u holds its non-recursive display lock.
++         * Leave the query queued for the normal event pump after that call. */
++        [self.queue query:query timeout:0.3 flags:WineQueryNoPreemptWait];
+         macdrv_release_query(query);
+     }
+ 
+@@ -1372,9 +1386,16 @@
              }
              else if (!state->minimized && [self isMiniaturized])
              {
@@ -473,7 +485,7 @@ index 94fe12a..96c91df 100644
              }
  
              if (discard)
-@@ -2073,7 +2090,8 @@ - (void) checkTransparency
+@@ -2073,7 +2094,8 @@
          {
              self.shapeChangedSinceLastDraw = TRUE;
              [[self contentView] setNeedsDisplay:YES];
@@ -483,10 +495,12 @@ index 94fe12a..96c91df 100644
              [self setOpaque:YES];
          }
          else if ([self isOpaque] && self.needsTransparency)
-@@ -2216,6 +2234,53 @@ - (void) postWindowFrameChanged:(NSRect)frame fullscreen:(BOOL)isFullscreen resi
+@@ -2214,6 +2236,53 @@
+         event->window_frame_changed.skip_size_move_loop = skipSizeMove;
+         [queue postEvent:event];
          macdrv_release_event(event);
-     }
- 
++    }
++
 +    /* While the fullscreen canvas is up, native fullscreen owns this window's
 +       frame, and Wine's rectangle for it must stay the canvas frame (the
 +       canvas origin, at the game's resolution) that the fullscreen transition
@@ -532,12 +546,10 @@ index 94fe12a..96c91df 100644
 +        }
 +        MACDRV_STAT_ADD(canvas_restores, 1);
 +        [self postCanvasFrame];
-+    }
-+
+     }
+ 
      - (void) updateForCursorClipping
-     {
-         [self adjustFeaturesForState];
-@@ -3078,6 +3143,7 @@ - (void)windowDidDeminiaturize:(NSNotification *)notification
+@@ -3078,6 +3147,7 @@
  
          [self windowDidResize:notification];
          [self checkWineDisplayLink];
@@ -545,7 +557,7 @@ index 94fe12a..96c91df 100644
      }
  
      - (void) windowDidEndLiveResize:(NSNotification *)notification
-@@ -3096,6 +3162,8 @@ - (void) windowDidEnterFullScreen:(NSNotification*)notification
+@@ -3096,6 +3166,8 @@
          enteredFullScreenTime = [[NSProcessInfo processInfo] systemUptime];
          macdrv_v1_canvas_layout(self);
          macdrv_v1_canvas_settled(self);
@@ -554,7 +566,7 @@ index 94fe12a..96c91df 100644
          if (pendingOrderOut)
              [self doOrderOut];
      }
-@@ -3631,7 +3699,11 @@ void macdrv_set_cocoa_window_frame(macdrv_window w, const CGRect* new_frame)
+@@ -3631,7 +3703,11 @@
      WineWindow* window = (WineWindow*)w;
  
      OnMainThread(^{

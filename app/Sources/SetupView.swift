@@ -11,13 +11,12 @@ struct SetupView: View {
                     VStack(spacing:24) {
                         if model.screen == .welcome {
                             VStack(spacing:18) {
-                                VStack(spacing:6) { Wordmark(height:84);AuthorLink() }
+                                Wordmark(height:84)
                                 Text(subtitle).font(LauncherStyle.font(16)).foregroundStyle(.secondary).multilineTextAlignment(.center)
                             }
                         } else {
                             VStack(spacing:6) {
                                 Wordmark(height:84,badge:model.screen == .failure ? (model.failure.code == "cancelled" ? "pause.fill" : "exclamationmark") : (model.screen == .driveMissing ? "externaldrive" : nil))
-                                AuthorLink()
                             }
                             LauncherHeading(title:model.title,subtitle:subtitle)
                         }
@@ -64,7 +63,7 @@ struct SetupView: View {
         case .preparing: return model.stage.isEmpty ? "Preparing your game environment." : model.stage
         case .launching: return model.stage == "Opening Steam" ? "Waiting for its window to appear." : model.stage
         case .installer: return "Steam’s installer is finishing. Choose Continue when it’s done."
-        case .running: return model.existingName != "Steam" ? "Can’t find the game window? Choose Show Game or check your other desktops." : "Play from the Steam window. Can’t find it? Choose Show Steam."
+        case .running: return "Choose Play to return to your game, or Open Steam for your Library."
         case .ready: return model.gameInstalled ? "Choose a game. Steam opens and starts it for you." : "Open Steam, sign in, then install Counter-Strike 2 or Deadlock from your Library."
         case .driveMissing: return "Your games are installed on “\(model.driveName)”. Connect the drive and this app picks up where it left off."
         case .failure: return model.failure.message
@@ -141,15 +140,10 @@ struct SetupView: View {
             if model.failure.code == "rosetta_required" {
                 Text("macOS will guide you through Apple’s installation.").font(LauncherStyle.font(13)).foregroundStyle(.secondary)
             }
-        case .ready:
+        case .ready, .running:
             VStack(spacing:16) {
                 GamePicker(model:model)
                 if model.lowStorage { storageWarning }
-                PerformanceTip()
-                if !model.firstMatchTipDismissed { FirstMatchTip { model.firstMatchTipDismissed=true } }
-            }
-        case .running:
-            VStack(spacing:16) {
                 PerformanceTip()
                 if !model.firstMatchTipDismissed { FirstMatchTip { model.firstMatchTipDismissed=true } }
             }
@@ -224,13 +218,7 @@ struct SetupView: View {
             LauncherCancelAction(title:"Cancel",action:model.cancelLaunch).keyboardShortcut(.cancelAction).disabled(!model.canCancel)
         case .installer:
             LauncherPrimaryAction(title:"Continue",action:model.finishInstaller).keyboardShortcut(.defaultAction).disabled(model.busy)
-        case .running:
-            if model.existingName == "Steam" {
-                ClientAction(title:"Show Steam",action:model.launch).keyboardShortcut(.defaultAction).disabled(model.busy)
-            } else {
-                LauncherPrimaryAction(title:"Show Game",action:model.launch).keyboardShortcut(.defaultAction).disabled(model.busy)
-            }
-        case .ready:
+        case .ready, .running:
             if model.installedGames.contains(model.selectedGame) {
                 LauncherPrimaryAction(title:"Play \(model.selectedGame.title)",action:model.play).keyboardShortcut(.defaultAction).disabled(model.busy)
                 // Steam on its own: the store, library, friends, settings.

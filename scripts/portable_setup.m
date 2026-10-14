@@ -456,7 +456,13 @@ static void launchClient(BOOL diagnostic, NSString *play, NSString *fullscreen, 
     NSString *displays=displaySignature(),*sessionDisplays=state()[@"session_displays"];
     BOOL displaysChanged=displays && ![displays isEqual:sessionDisplays];
     BOOL running=NO;for(NSDictionary *p in existing)running|=[p[@"kind"] isEqual:@"game"];
-    if(running) {focusSession(existing);return;}
+    if(running) {
+        // Open Steam must focus the client even while a game owns the session.
+        // Play keeps the existing game foreground rather than starting a duplicate.
+        NSArray *targets=game ? existing : [existing filteredArrayUsingPredicate:
+            [NSPredicate predicateWithFormat:@"kind == %@",@"client"]];
+        focusSession(targets);return;
+    }
     if(game && fullscreen) {
         NSDictionary *choice=gameLaunchOptions(NO)[game->key];
         if([choice[@"fullscreen"] boolValue]!=[fullscreen isEqual:@"1"])
