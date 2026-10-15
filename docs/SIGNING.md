@@ -1,6 +1,25 @@
 # Sign and launch MacVolvo 1.0
 
-## Launch the local build now
+## Current signing status
+
+Version 1.0 build 6 and its runtime are Developer ID signed with team
+`QZTVN6KK9H`. Signature verification, all 230 bundle-file hashes, 114 portable
+tests and four signing-input tests passed. The unsigned native code is identical
+to the preceding candidate; this is a signing change, not a new game fix.
+
+Apple submission: `dc249d02-8564-43ec-ad2c-82856e747036` (October 15, 2026).
+Last checked: **In Progress**. No notarized DMG is available yet.
+
+```sh
+xcrun notarytool info dc249d02-8564-43ec-ad2c-82856e747036 \
+  --keychain-profile macvolvo-notary
+open runtime/build/v1.0-signed/MacVolvo.app
+```
+
+The signed app can be launched locally. Complete the notarization and packaging
+steps below after Apple accepts it; do not interpret signing as notarization.
+
+## Launch the earlier local build
 
 From the repository root:
 
