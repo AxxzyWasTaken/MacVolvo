@@ -379,3 +379,26 @@ capture `parity-45A25F36-B750-4A17-92E4-14ED17735C8D` recorded 2,625 frame-bound
 intervals and 254 valid native presentation callbacks at the check. The native
 sample no longer showed the captured display-lock self-deadlock. This is one
 successful startup, not repeated-launch or post-match qualification.
+
+### October 15: v1.0 release preparation
+
+The owner requested a GitHub intro site, release downloads, known-bug notes,
+and cleanup of old app copies. Version is now 1.0, build 5; runtime remains
+phase2-20261014.1. Main-screen Play/Open Steam controls remain available while
+running, and the worker routes Open Steam to the client. Black-screen restart
+and Audio MIDI Setup 96,000 Hz workarounds are documented in-app, on the site,
+and in release notes. Combat spikes and post-match mouse loss remain unresolved.
+
+Full app build and 228-file bundle verification passed. Portable tests: 114
+passed under native arm64 Python 3.11. Focused session/resource/Steam/mouse/query
+checks: 16 passed. Swift display and launch-readiness fixtures passed. Initial
+portable invocations used a Rosetta Python and then an older system Python;
+rerunning with native Python 3.11 resolved those environment failures. Source
+index audit passed. Site checked at desktop and mobile sizes without overflow.
+
+The verified v1.0 app was copied to runtime/build/release/MacVolvo.app and opened.
+At the owner's explicit request, 12 older MacVolvo app bundles were deleted;
+Steam, games, prefixes and runtimes were retained. The versioned v1.0 build is
+also kept. Public signing remains pending: only Apple Development identity was
+available, not Developer ID Application. docs/SIGNING.md describes runtime and
+app signing plus notarization. Do not claim the unsigned test ZIP is notarized.

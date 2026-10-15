@@ -342,7 +342,7 @@ struct SettingsSheet:View {
         LauncherPanel(inset:16) {
             VStack(alignment:.leading,spacing:12) {
                 note("Speakers and headphones","Your game keeps the sound output that was selected when it started. Connect your headphones and select them on your Mac before you press Play; to switch later, quit the game and play again.")
-                note("Crackling audio","Try 96 kHz in Audio MIDI Setup if your output supports it. This helped on the tested M2 Max.")
+                note("Crackling audio","Open Audio MIDI Setup, select your output device, then set Format to 96,000 Hz (96 kHz), if supported. Quit and restart the game afterward. This helped on the tested M2 Max.")
             }
         }
     }
@@ -423,10 +423,11 @@ struct HelpSheet:View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let questions:[(question:String, answer:String)]=[
         ("How do I install Counter-Strike 2 or Deadlock?","Choose Open Steam and sign in with your Steam account. Find the game in your Library or the Store and click Install. Once it’s installed, choose it on \(Brand.name)’s Play screen."),
-        ("Why do my first matches stutter?","Your Mac prepares each of the game’s graphics effects the first time it appears. The stutters fade as you play, and the prepared graphics are kept for next time."),
+        ("Why does the game stutter?","First-use shader compilation can cause stutters. Persistent CS2 combat spikes and severe FPS drops are still under investigation; repeated stutters are not necessarily shader compilation."),
         ("How do I play on an external monitor?","Games open on your main display, the one with the menu bar. In System Settings › Displays, select the monitor and set Use as to Main display. Choose each game’s resolution in Settings › Display, then start it through \(Brand.name) to sync Steam Properties. Sizes that exceed the main display are fitted for that launch."),
         ("Which resolution should I choose?","Your display’s own resolution gives the sharpest picture; a smaller one runs faster and is scaled up to fill the screen. Change it in the game’s Video settings, or in Settings › Display, which shows what each size looks like on your main display."),
-        ("The game is black or the wrong size","Quit the game, choose Settings › Display › Reset Display Settings, then play again. The game opens at 1080p; your graphics and FPS settings stay as they are."),
+        ("Black screen with music on launch","Quit the game completely, then launch it again. This intermittent issue can occur from MacVolvo or Steam and is still being investigated."),
+        ("The game opens at the wrong size","Quit the game, choose Settings › Display › Reset Display Settings, then play again. The game opens at 1080p; your graphics and FPS settings stay as they are."),
         ("I can’t find the game window","Select the game or Steam in the Dock. If it’s still hidden, check your other desktops."),
         ("Steam shows a blank window","Close Steam, then open it again from \(Brand.name) rather than from the Dock: \(Brand.name) opens it with the display settings its window needs."),
         ("The game stopped responding","Choose Settings › Advanced › Force Quit, then play again. If it still won’t start, choose Settings › Advanced › Repair Game Files."),

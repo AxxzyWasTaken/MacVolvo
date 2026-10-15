@@ -1,6 +1,6 @@
 # Building from source
 
-Players don't need any of this. [Download the app](https://github.com/AsherJN/recall/releases/latest)
+Players don't need any of this. [Download the app](https://github.com/haeli05/MacVolvo/releases)
 instead. This page is for developers who want to rebuild the runtime or the app.
 
 The release runtime is built from pinned upstream sources by the portable build
@@ -19,7 +19,7 @@ reference.
 | Wine | `https://media.codeweavers.com/pub/crossover/source/crossover-sources-26.3.0.tar.gz`, `sources/wine` subtree |
 | Engine recipe reference | Soju commit `3a350b32bf906dd2a509b18c642a5a2676de022a`, `engine-v1.5` |
 | LLVM / Windows compiler | LLVM 15.0.7 x86_64; llvm-mingw 20251216 UCRT macOS universal |
-| Other build tools | Bison 3.8.2, Python 3.10+, Meson/Ninja, Apple Command Line Tools (macOS 26.5 SDK) and Metal compiler |
+| Other build tools | Bison 3.8.2, Python 3.11+, Meson/Ninja, Apple Command Line Tools (macOS 26.5 SDK) and Metal compiler |
 
 Initialize DXMT at its exact commit and initialize the pinned DirectX and NVAPI
 headers submodules. Apply, once each and in this order, `patches/dxmt-v1-private.patch`,
@@ -89,12 +89,15 @@ and a fresh full-engine rebuild remain required before binary publication.
 
 ## Tests
 
-On macOS with Python 3.10+ and Apple Command Line Tools:
+On macOS with Python 3.11+ and Apple Command Line Tools:
 
 ```sh
 python3 tests/run_portable.py
 python3 scripts/audit_public_source.py
 ```
+
+Use a native arm64 Python 3.11+ on Apple Silicon; the process-counter checks
+intentionally reject Python running under Rosetta because its clock differs.
 
 The portable selection runs deterministic source/analysis/recovery tests without
 the game or Wine runtime. Its process-counter tests compile a small local native
@@ -111,7 +114,7 @@ No test licenses or distributes Blizzard game files.
 ## Release build pipeline
 
 Each script prints its options with `--help`. Run them in order from a clean
-checkout with Apple Command Line Tools, clang, make, pkg-config and Python 3.10+:
+checkout with Apple Command Line Tools, clang, make, pkg-config and Python 3.11+:
 
 ```sh
 python3 scripts/build_portable_runtime.py --workspace runtime/phase-2 --download-only
@@ -120,10 +123,10 @@ python3 scripts/build_portable_runtime.py --workspace runtime/phase-2 --jobs 4
 python3 scripts/build_portable_dxmt.py --workspace runtime/phase-2 --jobs 2
 python3 scripts/build_portable_setup.py --output runtime/phase-2/native/ow2-setup
 python3 scripts/assemble_portable_runtime.py --workspace runtime/phase-2
-python3 scripts/build_native_app.py --output runtime/build/Recall.app
+python3 scripts/build_native_app.py --output runtime/build/MacVolvo.app
 python3 -m venv runtime/tools/dmgbuild && runtime/tools/dmgbuild/bin/python -m pip install dmgbuild==1.6.5
-runtime/tools/dmgbuild/bin/python scripts/build_release_dmg.py --app runtime/build/Recall.app \
-    --output runtime/release/Recall-1.0.0.dmg --identity "Developer ID Application: ..."
+runtime/tools/dmgbuild/bin/python scripts/build_release_dmg.py --app runtime/build/MacVolvo.app \
+    --output runtime/release/MacVolvo-1.0.dmg --identity "Developer ID Application: ..."
 ```
 
 The DMG opens as a fixed Finder window with the app, an Applications shortcut
