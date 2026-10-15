@@ -1,8 +1,9 @@
 # Publishing MacVolvo 1.0
 
 The source branch, intro page and draft release can be reviewed independently
-of the final signed installer. App version: 1.0; build: 5.
-Runtime: phase2-20261014.1.
+of the final signed installer. App version: 1.0; signed candidate build: 6.
+Runtime: macvolvo-1.0-signed.1.
+The earlier unsigned candidate remains build 5 with phase2-20261014.1.
 
 ## Current release candidate
 
@@ -12,7 +13,7 @@ requires notarization and the expected Developer ID team.
 
 ```sh
 python3 scripts/build_native_app.py --output runtime/build/v1.0/MacVolvo.app \
-  --runtime-archive runtime/build/display-query/runtime.tar.gz
+  --runtime-archive runtime/build/signed-runtime/macvolvo-1.0-signed.1.tar.gz
 ditto -c -k --sequesterRsrc --keepParent runtime/build/v1.0/MacVolvo.app \
   runtime/release/MacVolvo-1.0-unsigned.zip
 shasum -a 256 runtime/release/MacVolvo-1.0-unsigned.zip

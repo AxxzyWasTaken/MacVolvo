@@ -69,11 +69,36 @@ python3 scripts/build_native_app.py --output runtime/build/v1.0-signed/MacVolvo.
 codesign --verify --deep --strict runtime/build/v1.0-signed/MacVolvo.app
 ```
 
+## Re-sign the existing qualified candidate
+
+When preserving the already-tested runtime instead of rebuilding its dependencies,
+use the signing derivation tool. It checks every manifest hash, preserves identifiers
+and entitlements, leaves Apple's library intact, and verifies that removing the old
+and new signatures produces identical native code. This does not replace the source
+and license review required before public distribution.
+
+```sh
+python3 scripts/sign_runtime.py \
+  --archive runtime/build/display-query/runtime.tar.gz \
+  --output runtime/build/signed-runtime/macvolvo-1.0-signed.1 \
+  --version macvolvo-1.0-signed.1 --identity "$MACVOLVO_SIGN_ID"
+```
+
+Use a fresh output path for each run. The signed candidate uses runtime
+`macvolvo-1.0-signed.1` and app version 1.0, build 6. Its archive is
+`runtime/build/signed-runtime/macvolvo-1.0-signed.1.tar.gz`; use that path with
+`build_native_app.py --runtime-archive`. The release manifest pins its SHA-256.
+
 ## Notarize and package
 
 ```sh
 mkdir -p runtime/release
-ditto -c -k --sequesterRsrc --keepParent runtime/build/v1.0-signed/MacVolvo.app \
+# Include the unpacked runtime so Apple scans the native executables directly.
+mkdir runtime/release/notary-stage-1.0
+cp -Rc runtime/build/v1.0-signed/MacVolvo.app runtime/release/notary-stage-1.0/
+cp -Rc runtime/build/signed-runtime/macvolvo-1.0-signed.1 \
+  runtime/release/notary-stage-1.0/runtime
+ditto -c -k --sequesterRsrc runtime/release/notary-stage-1.0 \
   runtime/release/MacVolvo-1.0-notary.zip
 xcrun notarytool submit runtime/release/MacVolvo-1.0-notary.zip \
   --keychain-profile macvolvo-notary --wait
