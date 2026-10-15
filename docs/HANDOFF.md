@@ -402,3 +402,18 @@ Steam, games, prefixes and runtimes were retained. The versioned v1.0 build is
 also kept. Public signing remains pending: only Apple Development identity was
 available, not Developer ID Application. docs/SIGNING.md describes runtime and
 app signing plus notarization. Do not claim the unsigned test ZIP is notarized.
+
+GitHub delivery: source branch release/v1.0, draft PR
+https://github.com/haeli05/MacVolvo/pull/1. Pages is enabled for that branch's
+/docs folder and serves https://haeli05.github.io/MacVolvo/; the repository About
+website now points there. Switch Pages to main after merging the PR. The site
+and CSS returned HTTP 200 after the Pages build completed.
+
+The v1.0 draft prerelease contains MacVolvo-1.0-unsigned.zip, its SHA-256 file,
+and a validation JSON. All three remote asset digests and sizes match local
+files; ZIP CRC and all 228 bundle file hashes passed. The download is not yet
+public. Draft release URL:
+https://github.com/haeli05/MacVolvo/releases/tag/untagged-b4ff94a0c1aa7acb8452
+The running 1.0 launcher was visually checked with Steam open: game selection,
+Play Deadlock and Open Steam are present. The existing game-focus behavior is
+preserved; simultaneous independent game launching is not added.
