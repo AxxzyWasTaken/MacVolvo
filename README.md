@@ -23,8 +23,9 @@ through Wine, but that isn't supported by Northwood.
 
 ## On top of CrossOver and NotProton instead
 
-`crossover/macsl-crossover.sh` reuses what you already have: the CrossOver bottle (Steam and the game
-installed) and macOS Steam with NotProton. It only picks SCP:SL's graphics backend.
+`crossover/macsl-crossover.sh` reuses what you already have: every CrossOver bottle with the game installed
+(Rosetta or ARM64/FEX) and macOS Steam with NotProton. It only picks SCP:SL's graphics backend.
+Full guide: [docs/MACSL-CROSSOVER-GUIDE.md](docs/MACSL-CROSSOVER-GUIDE.md) (PDF alongside).
 
 ```
 macsl-crossover dxmt        # CrossOver bottle + NotProton launch options -> DXMT
