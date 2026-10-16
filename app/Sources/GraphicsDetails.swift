@@ -2,7 +2,7 @@ import SwiftUI
 
 /// "Preparing graphics" before Steam opens, as the worker reports it (graphics
 /// events from the pipeline helper, scripts/portable_pipeline.swift). Before each
-/// session MacVolvo prepares the shaders the games used on this Mac in earlier ones.
+/// session MacSL prepares the shaders the games used on this Mac in earlier ones.
 /// After an update or a macOS update it first warms the game's own shader cache
 /// with all of them, once.
 struct GraphicsProgress {

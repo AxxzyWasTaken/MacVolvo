@@ -54,7 +54,7 @@ struct SetupView: View {
     }
     private var subtitle:String {
         switch model.screen {
-        case .welcome: return "Set up Steam, then install Counter-Strike 2 or Deadlock."
+        case .welcome: return "Set up Steam, then install SCP: Secret Laboratory."
         case .moveApp:
             if let copy=model.installedCopy { return "Version \(copy.version) is in your Applications folder. Open it from there; this disk image is ejected for you." }
             return "\(Brand.name) runs from your Applications folder. It copies itself there, ejects this disk image and opens again."
@@ -64,7 +64,7 @@ struct SetupView: View {
         case .launching: return model.stage == "Opening Steam" ? "Waiting for its window to appear." : model.stage
         case .installer: return "Steam’s installer is finishing. Choose Continue when it’s done."
         case .running: return "Choose Play to return to your game, or Open Steam for your Library."
-        case .ready: return model.gameInstalled ? "Choose a game. Steam opens and starts it for you." : "Open Steam, sign in, then install Counter-Strike 2 or Deadlock from your Library."
+        case .ready: return model.gameInstalled ? "Press Play. Steam opens and starts the game for you." : "Open Steam, sign in, then install SCP: Secret Laboratory from your Library."
         case .driveMissing: return "Your games are installed on “\(model.driveName)”. Connect the drive and this app picks up where it left off."
         case .failure: return model.failure.message
         }

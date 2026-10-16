@@ -110,7 +110,7 @@ static void ownRoot(NSString *requested) {
         struct statfs mounted;
         if (statfs(volume.fileSystemRepresentation,&mounted) || strcmp(mounted.f_mntonname,volume.fileSystemRepresentation)) fail(@"install_location_unavailable");
     }
-    NSString *marker = join(root,@".macvolvo-owner");
+    NSString *marker = join(root,@".macsl-owner");
     if ([fm fileExistsAtPath:root] && ![fm fileExistsAtPath:marker] &&
         [fm contentsOfDirectoryAtPath:root error:nil].count) fail(@"directory_not_owned_by_app");
     // New locations only: an existing installation is never re-judged.
@@ -122,8 +122,8 @@ static void ownRoot(NSString *requested) {
     int markerFD = open(marker.fileSystemRepresentation,O_RDWR|O_CREAT|O_NOFOLLOW,0600);
     if (markerFD < 0) fail(@"invalid_ownership_marker");
     char bytes[32] = {0}; ssize_t n=read(markerFD,bytes,sizeof(bytes));
-    if (n==0) { if(write(markerFD,"macvolvo-native-v01\n",20)!=20) {close(markerFD);fail(@"ownership_write_failed");} }
-    else if(n!=20 || memcmp(bytes,"macvolvo-native-v01\n",20)) {close(markerFD);fail(@"invalid_ownership_marker");}
+    if (n==0) { if(write(markerFD,"macsl-native-v01\n",17)!=17) {close(markerFD);fail(@"ownership_write_failed");} }
+    else if(n!=17 || memcmp(bytes,"macsl-native-v01\n",17)) {close(markerFD);fail(@"invalid_ownership_marker");}
     close(markerFD);
     lockFD=open(join(root,@"setup.lock").fileSystemRepresentation,O_CREAT|O_RDWR|O_NOFOLLOW,0600);
     if(lockFD<0)fail(@"setup_already_running");
@@ -161,7 +161,7 @@ static NSMutableDictionary *wineEnv(NSString *engine) {
         @"DXMT_PIPELINE_CACHE_PATH":join(root,@"cache/pipelines")}];
     // The contract names Overwatch; MacVolvo's games take its place (portable_steam.h).
     [env addEntriesFromDictionary:@{@"WINEMAC_MOUSELOOK":gameList(@";"),@"WINE_GAME_MODE":gameList(@","),
-        @"DXMT_PIPELINE_CACHE_NAMESPACE":@"macvolvo-v1",
+        @"DXMT_PIPELINE_CACHE_NAMESPACE":@"macsl-v1",
         // Chrome flags for Steam's browser (portable_steam.h); the worker's own environment
         // can set others, for testing.
         @"WEBHELPER_EXTRA_ARGS":NSProcessInfo.processInfo.environment[@"WEBHELPER_EXTRA_ARGS"] ?: @"--use-angle=vulkan"}];
@@ -483,9 +483,9 @@ static void launchClient(BOOL diagnostic, NSString *play, NSString *fullscreen, 
         endSession(engine);
         if(!configureSteamLaunchOptions(defaults))fail(@"steam_launch_options_write_failed");
     }
-    if(!configureDeadlockRenderer()) {
-        if(game && [game->key isEqual:@"deadlock"])fail(@"game_renderer_write_failed");
-        event(@"game_renderer_configuration_skipped",@{@"game":@"deadlock"});
+    if(!configureGameWindowMode(fitted)) {
+        if(game)fail(@"game_renderer_write_failed");
+        event(@"game_renderer_configuration_skipped",@{@"game":@"scpsl"});
     }
     if(game) {
         NSDictionary *choice=choices[game->key],*actual=fitted[game->key];
@@ -494,7 +494,7 @@ static void launchClient(BOOL diagnostic, NSString *play, NSString *fullscreen, 
     }
     NSString *config=[NSString stringWithContentsOfFile:join(engine,@"config/dxmt.conf") encoding:NSUTF8StringEncoding error:nil];
     if(!config)fail(@"runtime_missing");
-    NSDictionary *base=fitted[@"cs2"];
+    NSDictionary *base=fitted[mvGames[0].key];
     config=gamesProfile(canvasProfile(config,[base[@"width"] integerValue],[base[@"height"] integerValue]),fitted);
     if(![config writeToFile:join(root,@"dxmt.conf") atomically:YES encoding:NSUTF8StringEncoding error:nil])fail(@"settings_write_failed");
     makeGameApps(engine);
@@ -582,7 +582,7 @@ static void discardUnused(void) {
     // the empty scaffold ownRoot made (plus setup check logs). Anything else,
     // including any installation state, keeps the folder untouched.
     if([fm fileExistsAtPath:join(root,@"state.json")])fail(@"location_in_use");
-    NSSet *scaffold=[NSSet setWithArray:@[@".macvolvo-owner",@"setup.lock",@".DS_Store",@"runtimes",@"downloads",@"logs",@"home",@"tmp",@"cache"]];
+    NSSet *scaffold=[NSSet setWithArray:@[@".macsl-owner",@"setup.lock",@".DS_Store",@"runtimes",@"downloads",@"logs",@"home",@"tmp",@"cache"]];
     for(NSString *name in [fm contentsOfDirectoryAtPath:root error:nil]) {
         if(![scaffold containsObject:name])fail(@"location_in_use");
         struct stat st;if(lstat(join(root,name).fileSystemRepresentation,&st))fail(@"location_in_use");
@@ -599,7 +599,7 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
     @try {
         if(argc<2)fail(@"command_required");NSString *command=@(argv[1]);NSMutableDictionary *options=[NSMutableDictionary dictionary];
         for(int i=2;i<argc;i+=2) {if(i+1>=argc || strncmp(argv[i],"--",2))fail(@"invalid_arguments");options[@(argv[i]+2)]=@(argv[i+1]);}
-        NSString *defaultRoot=join([fm URLsForDirectory:NSApplicationSupportDirectory inDomains:NSUserDomainMask].firstObject.path,@"MacVolvo");
+        NSString *defaultRoot=join([fm URLsForDirectory:NSApplicationSupportDirectory inDomains:NSUserDomainMask].firstObject.path,@"MacSL");
         monitorMode=[command isEqual:@"watch"];
         ownRoot(options[@"root"] ?: defaultRoot);
         if([command isEqual:@"preflight"])preflight();
@@ -655,14 +655,14 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
         else if([command isEqual:@"verify"]) {verifyRuntime(runtime(),state()[@"active_runtime"]);event(@"runtime_verified",nil);}
         else if([command isEqual:@"prepare"])prepare();
         else if([command isEqual:@"install-battlenet"])installClient(options[@"installer"] ?: download(options[@"url"],options[@"sha256"]),options[@"sha256"]);
-        // --game cs2|deadlock starts that game through Steam (portable_steam.h); without it
+        // --game scpsl starts that game through Steam (portable_steam.h); without it
         // only Steam opens. --play 1 (Recall's) means the first installed game.
         // --fullscreen 0 starts the game in a window (Fullscreen toggle per game); on by default.
         // --metal-hud 1 shows Apple's Metal Performance HUD over the game (Settings); off by default.
         // --game-mode 0 starts the game without macOS Game Mode (hidden app default); on by default.
         else if([command isEqual:@"launch"]) {
             NSString *game=options[@"game"];
-            if(!game && [options[@"play"] isEqual:@"1"])game=installedGames().firstObject ?: @"cs2";
+            if(!game && [options[@"play"] isEqual:@"1"])game=installedGames().firstObject ?: mvGames[0].key;
             launchClient(NO,game,options[@"fullscreen"],[options[@"metal-hud"] isEqual:@"1"],![options[@"game-mode"] isEqual:@"0"]);
         }
         else if([command isEqual:@"diagnostic-launch"])launchClient(YES,options[@"game"],options[@"fullscreen"],[options[@"metal-hud"] isEqual:@"1"],![options[@"game-mode"] isEqual:@"0"]);

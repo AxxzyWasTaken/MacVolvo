@@ -1,7 +1,10 @@
-/* MacVolvo: Steam and Valve's Source 2 games in place of Battle.net and Overwatch.
+/* MacSL: Steam and SCP: Secret Laboratory in place of Battle.net and Overwatch.
+ * (Fork of MacVolvo, which ported Recall to Steam and Valve's Source 2 games.)
  *
  * Games. Each is started through Steam (steam.exe -applaunch <id>) with its own options
- * (space-separated): fullscreen or windowed at the chosen size, no joystick polling (-nojoy).
+ * (space-separated). SCP: Secret Laboratory is a Unity 6 game: -force-d3d11 keeps it on
+ * Direct3D 11 (DXMT translates only that), and Unity's -screen-* / -window-mode switches
+ * pick the size and fullscreen mode.
  *
  * Steam's window. On Wine 11 (the engine is CrossOver 26.3) Steam's browser draws black
  * whenever it runs with its GPU off (https://github.com/gauthierpiarrette/highball/issues/282).
@@ -20,10 +23,7 @@
 
 typedef struct { NSString *key, *name, *exe, *appID, *folder, *options; } MVGame;
 static const MVGame mvGames[]={
-    {@"cs2",@"Counter-Strike 2",@"cs2.exe",@"730",@"Counter-Strike Global Offensive/game/bin/win64",@"-dx11"},
-    // -dx11: DXMT translates Direct3D 11 only, and Deadlock may otherwise pick Vulkan.
-    // -novid: skips Deadlock's intro video (CS2 has none).
-    {@"deadlock",@"Deadlock",@"deadlock.exe",@"1422450",@"Deadlock/game/bin/win64",@"-dx11 -novid"},
+    {@"scpsl",@"SCP: Secret Laboratory",@"SCPSL.exe",@"700330",@"SCP Secret Laboratory",@"-force-d3d11"},
 };
 static const NSUInteger mvGameCount=sizeof(mvGames)/sizeof(mvGames[0]);
 static const MVGame *mvGame(NSString *key) {
@@ -181,15 +181,17 @@ static NSArray *mvSteamArgumentTokens(NSString *text) {
 }
 static NSString *mvMergedSteamArguments(NSString *current, NSString *required, BOOL initialFPSCap) {
     NSArray *tokens=mvSteamArgumentTokens(current);NSMutableArray *kept=[NSMutableArray array];BOOL fps=NO;
-    NSSet *flags=[NSSet setWithArray:@[@"-nojoy",@"-joy",@"-dx11",@"-dx12",@"-dx9",@"-vulkan",@"-opengl",@"-fullscreen",@"-windowed",@"-window",@"-sw"]];
-    NSSet *sizes=[NSSet setWithArray:@[@"-w",@"-width",@"-h",@"-height"]];
+    // Switches the launcher owns. Flags stand alone; valued switches also drop the next token.
+    NSSet *flags=[NSSet setWithArray:@[@"-nojoy",@"-joy",@"-dx11",@"-dx12",@"-dx9",@"-vulkan",@"-opengl",@"-fullscreen",@"-windowed",@"-window",@"-sw",
+        @"-force-d3d11",@"-force-d3d12",@"-force-vulkan",@"-force-glcore",@"-force-metal",@"-popupwindow"]];
+    NSSet *valued=[NSSet setWithArray:@[@"-w",@"-width",@"-h",@"-height",@"-screen-width",@"-screen-height",@"-screen-fullscreen",@"-window-mode"]];
     for(NSUInteger i=0;i<tokens.count;i++) {
         NSString *word=tokens[i][@"word"];
         if([word isEqual:@"+fps_max"] || [word hasPrefix:@"+fps_max="])fps=YES;
         if([flags containsObject:word])continue;
         if([word isEqual:@"-novid"] && [required containsString:@"-novid"])continue;
-        if([sizes containsObject:word]) {
-            if(i+1<tokens.count && [tokens[i+1][@"word"] rangeOfCharacterFromSet:NSCharacterSet.decimalDigitCharacterSet.invertedSet].location==NSNotFound)i++;
+        if([valued containsObject:word]) {
+            if(i+1<tokens.count && ![tokens[i+1][@"word"] hasPrefix:@"-"] && ![tokens[i+1][@"word"] hasPrefix:@"+"])i++;
             continue;
         }
         [kept addObject:tokens[i][@"raw"]];
@@ -204,7 +206,10 @@ static NSDictionary *steamLaunchDefaults(NSDictionary *gameOptions) {
         const MVGame *game=&mvGames[i];NSDictionary *options=gameOptions[game->key];
         NSInteger width=[options[@"width"] integerValue],height=[options[@"height"] integerValue];
         if(width<640 || width>16384 || height<480 || height>16384)continue;
-        defaults[game->key]=[NSString stringWithFormat:@"-nojoy %@ -w %ld -h %ld %@",[options[@"fullscreen"] boolValue]?@"-fullscreen":@"-windowed",(long)width,(long)height,game->options];
+        // Unity: exclusive fullscreen is what engages the engine's fixed-size canvas (dxmt.conf).
+        BOOL full=[options[@"fullscreen"] boolValue];
+        defaults[game->key]=[NSString stringWithFormat:@"%@ -screen-fullscreen %d -window-mode %@ -screen-width %ld -screen-height %ld",
+            game->options,full?1:0,full?@"exclusive":@"windowed",(long)width,(long)height];
     }
     return defaults;
 }
@@ -217,7 +222,7 @@ static NSString *mvUpdatedSteamVDF(NSString *text, NSDictionary *defaults) {
         NSArray *appPath=[appsPath arrayByAddingObject:game->appID];text=mvVDFEnsureObject(text,appPath);
         NSDictionary *app=mvVDFPath(mvVDFParse(text),appPath),*option=mvVDFChild(app,@"LaunchOptions");
         if(option && !option[@"value"])mvInvalidSteamConfig();
-        NSString *before=option[@"value"]?:@"",*after=mvMergedSteamArguments(before,required,[game->key isEqual:@"cs2"]);
+        NSString *before=option[@"value"]?:@"",*after=mvMergedSteamArguments(before,required,NO);
         if([before isEqual:after])continue;
         if(option) {NSMutableString *out=[text mutableCopy];[out replaceCharactersInRange:[option[@"valueRange"] rangeValue] withString:mvVDFQuote(after)];text=out;}
         else {
@@ -248,7 +253,7 @@ static BOOL configureSteamLaunchOptions(NSDictionary *defaults) {
     @try {
         NSArray *plan=steamLaunchOptionsPlan(defaults);
         for(NSDictionary *change in plan) {
-            NSString *path=change[@"path"],*backup=[path stringByAppendingString:@".macvolvo-backup"];
+            NSString *path=change[@"path"],*backup=[path stringByAppendingString:@".macsl-backup"];
             if(![[NSData dataWithContentsOfFile:path] isEqual:change[@"before"]])return NO;
             struct stat st;
             if(!lstat(backup.fileSystemRepresentation,&st)) {
@@ -261,23 +266,34 @@ static BOOL configureSteamLaunchOptions(NSDictionary *defaults) {
         return YES;
     } @catch(NSException *ignored) {(void)ignored;return NO;}
 }
-/* A renderer selected in Deadlock's Video settings is saved here, outside Steam's
- * launch options. Library launches bypass our -dx11 argument, so a saved Vulkan
- * choice would bypass DXMT. Keep those launches on the same supported renderer;
- * preserve the original file and every other field. Call only with games closed. */
-static BOOL configureDeadlockRenderer(void) {
-    NSString *path=join(steamFolder(),@"steamapps/common/Deadlock/game/citadel/cfg/boot.vcfg");
-    NSString *text=[NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil];
-    if(!text)return YES;
-    NSRegularExpression *rx=[NSRegularExpression regularExpressionWithPattern:@"(\"DefaultRenderSystemOption\"\\s+\")-vulkan(\")" options:0 error:nil];
-    NSRange whole=NSMakeRange(0,text.length);
-    if([rx numberOfMatchesInString:text options:0 range:whole]!=1)return YES;
-    NSString *backup=[path stringByAppendingString:@".macvolvo-backup"];
-    if(![fm fileExistsAtPath:backup] && ![fm copyItemAtPath:path toPath:backup error:nil])return NO;
-    NSString *fixed=[rx stringByReplacingMatchesInString:text options:0 range:whole withTemplate:@"$1-dx11$2"];
-    if(![fixed writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil])return NO;
-    event(@"game_renderer_configured",@{@"game":@"deadlock",@"renderer":@"dx11"});
-    return YES;
+/* SCP: Secret Laboratory re-applies its own saved window mode after start-up, overriding
+ * -window-mode. It keeps it in %APPDATA%/SCP Secret Laboratory/registry.txt (CRLF lines,
+ * "07UserSettings_0A50_2000::-%(|::<n>", 0 exclusive, 1 borderless, 3 windowed). Write the
+ * launch's choice there, keeping a one-time backup and every other line. Call with games closed. */
+static BOOL configureGameWindowMode(NSDictionary *gameOptions) {
+    NSDictionary *options=gameOptions[@"scpsl"];if(!options)return YES;
+    NSString *value=[options[@"fullscreen"] boolValue]?@"0":@"3";
+    NSString *users=join(root,@"environment/drive_c/users");BOOL ok=YES;
+    for(NSString *user in [fm contentsOfDirectoryAtPath:users error:nil]) {
+        if([user isEqual:@"Public"])continue;
+        NSString *path=join(join(users,user),@"AppData/Roaming/SCP Secret Laboratory/registry.txt");
+        NSString *text=[NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil];
+        if(!text)continue;  // written by the game on first start; the command line covers that one
+        NSRegularExpression *rx=[NSRegularExpression regularExpressionWithPattern:@"^(\\d\\dUserSettings_0A50_2000::-%\\(\\|::)[^\\r\\n]*" options:NSRegularExpressionAnchorsMatchLines error:nil];
+        NSTextCheckingResult *hit=[rx firstMatchInString:text options:0 range:NSMakeRange(0,text.length)];
+        NSString *fixed;
+        if(hit) {
+            NSMutableString *out=[text mutableCopy];
+            [out replaceCharactersInRange:hit.range withString:[[text substringWithRange:[hit rangeAtIndex:1]] stringByAppendingString:value]];
+            fixed=out;
+        } else fixed=[text stringByAppendingFormat:@"07UserSettings_0A50_2000::-%%(|::%@\r\n",value];
+        if([fixed isEqual:text])continue;
+        NSString *backup=[path stringByAppendingString:@".macsl-backup"];
+        if(![fm fileExistsAtPath:backup] && ![fm copyItemAtPath:path toPath:backup error:nil]) {ok=NO;continue;}
+        if(![fixed writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil]) {ok=NO;continue;}
+        event(@"game_window_mode_configured",@{@"game":@"scpsl",@"mode":value});
+    }
+    return ok;
 }
 static NSString *mvProcessName(NSString *name) {
     // Wine may expose either a Windows path or its absolute Unix executable
@@ -353,7 +369,7 @@ static void makeGameApps(NSString *engine) {
         NSMutableDictionary *info=[[NSDictionary dictionaryWithContentsOfFile:plist] mutableCopy];
         if(!info) {[fm removeItemAtPath:app error:nil];continue;}
         info[@"CFBundleName"]=mvGames[i].name;
-        info[@"CFBundleIdentifier"]=[@"app.macvolvo.game." stringByAppendingString:mvGames[i].key];
+        info[@"CFBundleIdentifier"]=[@"app.macsl.game." stringByAppendingString:mvGames[i].key];
         info[@"NSMicrophoneUsageDescription"]=[mvGames[i].name stringByAppendingString:@" uses the microphone for voice chat."];
         [info removeObjectForKey:@"NSLocalNetworkUsageDescription"];
         [info writeToFile:plist atomically:YES];
@@ -385,7 +401,6 @@ static NSString *gamesProfile(NSString *profile, NSDictionary *gameOptions) {
             NSString *key=[[lines[j] componentsSeparatedByString:@"="][0] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
             if([key isEqual:@"dxgi.fullscreenCanvasWidth"] && width>=640 && width<=16384)lines[j]=[NSString stringWithFormat:@"%@ = %ld",key,(long)width];
             else if([key isEqual:@"dxgi.fullscreenCanvasHeight"] && height>=480 && height<=16384)lines[j]=[NSString stringWithFormat:@"%@ = %ld",key,(long)height];
-            else if([game->key isEqual:@"cs2"] && [key isEqual:@"d3d11.shaderCompilerThreads"])lines[j]=@"d3d11.shaderCompilerThreads = 4";
         }
         [out appendFormat:@"[%@]%@\n",game->exe,[lines componentsJoinedByString:@"\n"]];
     }

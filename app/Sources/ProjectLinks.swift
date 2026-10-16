@@ -63,7 +63,7 @@ private enum ProjectArtwork {
         Bundle.main.url(forResource:name,withExtension:type).flatMap { NSImage(contentsOf:$0) } ?? NSImage()
     }
 }
-/// The MacVolvo lockup (mark and name) in its light- and dark-appearance versions; the
+/// The MacSL lockup (mark and name) in its light- and dark-appearance versions; the
 /// mark is the square at its leading edge. A badge marks a state, as on the app icon
 /// (a failure, a paused setup, a missing drive).
 struct Wordmark:View {
@@ -99,7 +99,7 @@ struct AuthorLink:View {
         }.buttonStyle(.plain).pointerStyle(.link).help("haeli05 on GitHub")
     }
 }
-/// The project MacVolvo is built on, credited in About.
+/// The project MacSL is built on, credited in About.
 struct UpstreamLink:View {
     var body:some View {
         Link(destination:Brand.upstream) {

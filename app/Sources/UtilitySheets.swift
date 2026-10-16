@@ -256,7 +256,7 @@ struct SettingsSheet:View {
                     if game != AppModel.Game.allCases.last { Divider().padding(.top,4) }
                 }
             }
-            Text(model.running == .game ? "Close your game to change its launch options." : "Changes save as you choose. Start the game through MacVolvo once to apply them to Steam Properties too.")
+            Text(model.running == .game ? "Close your game to change its launch options." : "Changes save as you choose. Start the game through MacSL once to apply them to Steam Properties too.")
                 .font(LauncherStyle.font(12)).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
             Divider().padding(.vertical,2)
             SettingSwitch(title:"Remember a resolution for each display",detail:"Applies to the default size until you choose a resolution for a game.",
@@ -372,7 +372,7 @@ struct SettingsSheet:View {
                 .disabled(model.busy || !model.clientInstalled)
         }
     }
-    /// Rarely needed: a network that hands out its proxy automatically (MacVolvo connects
+    /// Rarely needed: a network that hands out its proxy automatically (MacSL connects
     /// directly, Recall issue #15). Steam and the games carry it from when they start.
     private var advanced:some View {
         let locked=model.running != nil || !model.canChangeAdvanced
@@ -422,11 +422,11 @@ struct HelpSheet:View {
     @State private var expanded=Set<Int>()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let questions:[(question:String, answer:String)]=[
-        ("How do I install Counter-Strike 2 or Deadlock?","Choose Open Steam and sign in with your Steam account. Find the game in your Library or the Store and click Install. Once it’s installed, choose it on \(Brand.name)’s Play screen."),
-        ("Why does the game stutter?","First-use shader compilation can cause stutters. Persistent CS2 combat spikes and severe FPS drops are still under investigation; repeated stutters are not necessarily shader compilation."),
+        ("How do I install SCP: Secret Laboratory?","Choose Open Steam and sign in with your Steam account. Find the game in your Library or the Store and click Install. Once it’s installed, choose it on \(Brand.name)’s Play screen."),
+        ("Why does the game stutter?","First-use shader compilation can cause stutters. A short hitch about every 5 seconds is a known SCP: Secret Laboratory issue under Wine and is still being investigated."),
         ("How do I play on an external monitor?","Games open on your main display, the one with the menu bar. In System Settings › Displays, select the monitor and set Use as to Main display. Choose each game’s resolution in Settings › Display, then start it through \(Brand.name) to sync Steam Properties. Sizes that exceed the main display are fitted for that launch."),
         ("Which resolution should I choose?","Your display’s own resolution gives the sharpest picture; a smaller one runs faster and is scaled up to fill the screen. Change it in the game’s Video settings, or in Settings › Display, which shows what each size looks like on your main display."),
-        ("Black screen with music on launch","Quit the game completely, then launch it again. This intermittent issue can occur from MacVolvo or Steam and is still being investigated."),
+        ("Black screen with music on launch","Quit the game completely, then launch it again. This intermittent issue can occur from MacSL or Steam and is still being investigated."),
         ("The game opens at the wrong size","Quit the game, choose Settings › Display › Reset Display Settings, then play again. The game opens at 1080p; your graphics and FPS settings stay as they are."),
         ("I can’t find the game window","Select the game or Steam in the Dock. If it’s still hidden, check your other desktops."),
         ("Steam shows a blank window","Close Steam, then open it again from \(Brand.name) rather than from the Dock: \(Brand.name) opens it with the display settings its window needs."),
@@ -542,7 +542,7 @@ struct AboutSheet:View {
                 VStack(alignment:.leading,spacing:10) {
                     Text("Credits").font(LauncherStyle.font(15,.semibold)).accessibilityAddTraits(.isHeader)
                     AuthorLink()
-                    Text("\(Brand.name) runs Counter-Strike 2 and Deadlock through Steam on the Wine engine, Metal translation and setup that Recall built for Overwatch.")
+                    Text("\(Brand.name) runs SCP: Secret Laboratory through Steam on the Wine engine, Metal translation and setup that Recall built for Overwatch.")
                         .font(LauncherStyle.font(13)).lineSpacing(3).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
                     UpstreamLink()
                 }
@@ -605,7 +605,7 @@ struct UninstallSheet:View {
                     VStack(alignment:.leading,spacing:14) {
                         Text("What will be moved to the Trash").font(LauncherStyle.font(14,.semibold))
                         VStack(alignment:.leading,spacing:8) {
-                            row("Games", "Counter-Strike 2, Deadlock and their settings")
+                            row("Games", "SCP: Secret Laboratory and its settings")
                             row("Steam", "The Steam app set up by this app")
                             row(Brand.name, "This app and its setup files")
                         }

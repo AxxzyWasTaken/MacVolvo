@@ -19,12 +19,12 @@ from derive_runtime import archive_minimum, check_archive, format_macos, parse_m
 ROOT=Path(__file__).resolve().parents[1]
 # The bundle and executable name players see; Brand.swift holds the in-app
 # copy. Its own identifier and data folder keep it apart from Recall, which it is built on.
-APP_NAME='MacVolvo'
-APP_BUILD='6'
+APP_NAME='MacSL'
+APP_BUILD='1'
 # The games' voice chat runs under this app's microphone permission (Microphone.swift); the
 # hardened runtime gives an app signed without the entitlement silence, with no prompt.
 ENTITLEMENTS={'com.apple.security.device.audio-input':True}
-MICROPHONE_USAGE='Voice chat in Counter-Strike 2 and Deadlock uses your microphone.'
+MICROPHONE_USAGE='Voice chat in SCP: Secret Laboratory uses your microphone.'
 RESOURCES=('Wordmark.png','WordmarkDark.png')
 # llvm-mingw (docs/HANDOFF.md) builds the Windows stand-in for Steam's steamwebhelper.exe.
 MINGW_CLANG=ROOT/'runtime/toolchains/llvm-mingw-20261006-ucrt-macos-universal/bin/x86_64-w64-mingw32-clang'
@@ -51,7 +51,7 @@ def build(output,workspace,runtime_archive,icon=None,identity=None):
     rosetta=helpers/'Rosetta Check.app/Contents';(rosetta/'MacOS').mkdir(parents=True)
     source=output.parent/'rosetta-check.c';source.write_text('int main(void) { return 0; }\n')
     run('/usr/bin/clang','-ffile-prefix-map='+str(ROOT)+'=/ow2-source','-arch','x86_64','-mmacosx-version-min='+MINIMUM_MACOS,source,'-o',rosetta/'MacOS/RosettaCheck')
-    (rosetta/'Info.plist').write_bytes(plistlib.dumps({'CFBundleIdentifier':'app.macvolvo.rosetta-check','CFBundleExecutable':'RosettaCheck','CFBundleName':'Rosetta Check','CFBundlePackageType':'APPL','LSUIElement':True,'LSMinimumSystemVersion':MINIMUM_MACOS}))
+    (rosetta/'Info.plist').write_bytes(plistlib.dumps({'CFBundleIdentifier':'app.macsl.rosetta-check','CFBundleExecutable':'RosettaCheck','CFBundleName':'Rosetta Check','CFBundlePackageType':'APPL','LSUIElement':True,'LSMinimumSystemVersion':MINIMUM_MACOS}))
     run('/bin/cp','-c',runtime_archive,resources/release['runtimeArchive'])
     shutil.copy2(ROOT/'app/Resources/release.json',resources/'release.json')
     shutil.copy2(ROOT/'docs/candidate-parity-contract.json',resources/'candidate-parity-contract.json')
@@ -72,7 +72,7 @@ def build(output,workspace,runtime_archive,icon=None,identity=None):
         iconset=output.parent/'AppIcon.iconset'
         run('/usr/bin/swift',ROOT/'scripts/app_icon.swift',ROOT/'app/Resources/AppIcon.png',iconset)
         run('/usr/bin/iconutil','-c','icns',iconset,'-o',resources/'AppIcon.icns')
-    (output/'Contents/Info.plist').write_bytes(plistlib.dumps({'CFBundleIdentifier':'app.macvolvo.launcher','CFBundleExecutable':APP_NAME,'CFBundleName':APP_NAME,'CFBundleDisplayName':APP_NAME,'CFBundlePackageType':'APPL','CFBundleShortVersionString':release['appVersion'],'CFBundleVersion':APP_BUILD,'CFBundleIconFile':'AppIcon','LSMinimumSystemVersion':MINIMUM_MACOS,'NSHighResolutionCapable':True,'LSMultipleInstancesProhibited':True,'NSPrincipalClass':'NSApplication','NSMicrophoneUsageDescription':MICROPHONE_USAGE,'NSHumanReadableCopyright':'Independent community project based on Recall. Not affiliated with or endorsed by Valve, Volvo or Apple.'}))
+    (output/'Contents/Info.plist').write_bytes(plistlib.dumps({'CFBundleIdentifier':'app.macsl.launcher','CFBundleExecutable':APP_NAME,'CFBundleName':APP_NAME,'CFBundleDisplayName':APP_NAME,'CFBundlePackageType':'APPL','CFBundleShortVersionString':release['appVersion'],'CFBundleVersion':APP_BUILD,'CFBundleIconFile':'AppIcon','LSMinimumSystemVersion':MINIMUM_MACOS,'NSHighResolutionCapable':True,'LSMultipleInstancesProhibited':True,'NSPrincipalClass':'NSApplication','NSMicrophoneUsageDescription':MICROPHONE_USAGE,'NSHumanReadableCopyright':'Independent community project based on MacVolvo and Recall. Not affiliated with or endorsed by Northwood Studios, Valve or Apple.'}))
     if identity:
         for binary in (helpers/'ow2-setup',rosetta.parent):
             run('/usr/bin/codesign','--force','--options','runtime','--timestamp','--sign',identity,binary)

@@ -11,14 +11,14 @@ final class AppModel {
     var uninstall: UninstallState = .idle
     var update: UpdateState = .idle
     var updateNotice=""
-    /// The games MacVolvo starts through Steam (worker: launch --game, status games).
+    /// The games MacSL starts through Steam (worker: launch --game, status games).
     enum Game: String, CaseIterable, Identifiable {
-        case cs2, deadlock
+        case scpsl
         var id:String { rawValue }
-        var title:String { self == .cs2 ? "Counter-Strike 2" : "Deadlock" }
+        var title:String { "SCP: Secret Laboratory" }
     }
     /// The game Play starts; the last one chosen.
-    var selectedGame=Game(rawValue:UserDefaults.standard.string(forKey:"selectedGame") ?? "") ?? .cs2 {
+    var selectedGame=Game(rawValue:UserDefaults.standard.string(forKey:"selectedGame") ?? "") ?? .scpsl {
         didSet { UserDefaults.standard.set(selectedGame.rawValue,forKey:"selectedGame") }
     }
     /// Games that start fullscreen (worker: launch --fullscreen); each is on until turned off.
@@ -392,7 +392,7 @@ final class AppModel {
                     if !processes.isEmpty { _ = try await service.run("close-client",event:receive) }
                 }
                 update = .downloading(0)
-                let work=FileManager.default.urls(for:.cachesDirectory,in:.userDomainMask)[0].appendingPathComponent("app.macvolvo.launcher/update")
+                let work=FileManager.default.urls(for:.cachesDirectory,in:.userDomainMask)[0].appendingPathComponent("app.macsl.launcher/update")
                 try await UpdateInstaller.install(item,over:Bundle.main.bundleURL,team:team,identifier:identifier,work:work) { fraction in
                     Task { @MainActor in if case .downloading=self.update { self.update = .downloading(fraction) } }
                 }
@@ -463,7 +463,7 @@ final class AppModel {
         if panel.runModal() == .OK,let folder=panel.url { useLocation(InstallLocation.root(forChosen:folder)) }
     }
     /// Stop waiting for a disconnected drive. Nothing on it is changed; choosing
-    /// its MacVolvo folder later reconnects that installation.
+    /// its MacSL folder later reconnects that installation.
     func useThisMac() {
         setRoot(InstallLocation.standard);notice="";recheck()
     }
@@ -477,8 +477,8 @@ final class AppModel {
         if value == .readyToInstall { clientInstalled=false;gameInstalled=false;freeBytes=412_000_000_000 }
         update = .upToDate
         state["onboarding_complete"]=value != .welcome && value != .readyToInstall && value != .installer
-        installedGames=[.cs2]
-        if value == .moveApp { moveReplaces=["MacVolvo Beta"] }
+        installedGames=[.scpsl]
+        if value == .moveApp { moveReplaces=["MacSL Beta"] }
         let args=CommandLine.arguments
         if let i=args.firstIndex(of:"--preview-macos"),args.indices.contains(i+1) { macOS=args[i+1] }
         // The launching screen's "Preparing graphics" details: preparing, done, first,
@@ -615,7 +615,7 @@ final class AppModel {
         let launchEvents:[[String:Any]]
         do {
             // macOS Game Mode is on unless support turned it off for a player:
-            // defaults write app.macvolvo.launcher gameMode -bool false
+            // defaults write app.macsl.launcher gameMode -bool false
             let gameMode=UserDefaults.standard.object(forKey:"gameMode") as? Bool ?? true
             launchEvents=try await service.run("launch",(game.map { ["--game",$0.rawValue,"--fullscreen",fullscreen($0) ? "1" : "0"] } ?? [])+["--metal-hud",metalHUD ? "1" : "0"]+(gameMode ? [] : ["--game-mode","0"]),event:receive)
         } catch {
@@ -907,7 +907,7 @@ final class AppModel {
             catch { uninstall = .failed((error as? SetupFailure ?? SetupFailure(code:"unexpected_setup_error")).message);return }
             // The game folder is in the Trash. Now remove what lives outside it:
             // the single-instance lock folder, saved defaults, then the app itself.
-            let lockDirectory=fm.urls(for:.cachesDirectory,in:.userDomainMask)[0].appendingPathComponent("app.macvolvo.launcher")
+            let lockDirectory=fm.urls(for:.cachesDirectory,in:.userDomainMask)[0].appendingPathComponent("app.macsl.launcher")
             try? fm.removeItem(at:lockDirectory)
             if let id=Bundle.main.bundleIdentifier { UserDefaults.standard.removePersistentDomain(forName:id) }
             // Move to Trash, never delete; if macOS refuses, the user drags it.

@@ -9,7 +9,7 @@ import Darwin
     func applicationDidFinishLaunching(_ notification:Notification) {
         // NSWorkspace normally routes repeat opens to this process. The file lock
         // also covers explicit `open -n` and copies of the same app bundle.
-        let lockDirectory=FileManager.default.urls(for:.cachesDirectory,in:.userDomainMask)[0].appendingPathComponent("app.macvolvo.launcher")
+        let lockDirectory=FileManager.default.urls(for:.cachesDirectory,in:.userDomainMask)[0].appendingPathComponent("app.macsl.launcher")
         try? FileManager.default.createDirectory(at:lockDirectory,withIntermediateDirectories:true,attributes:[.posixPermissions:0o700])
         lockFD=open(lockDirectory.appendingPathComponent("app.lock").path,O_CREAT|O_RDWR|O_NOFOLLOW,0o600)
         if lockFD<0 || flock(lockFD,LOCK_EX|LOCK_NB) != 0 {

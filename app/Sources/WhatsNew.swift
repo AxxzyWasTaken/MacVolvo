@@ -2,13 +2,13 @@
 enum WhatsNew {
     static let version="1.0"
     static let items:[(symbol:String, title:String, detail:String)]=[
-        ("gamecontroller","Your launch controls stay available",
-         "Play and Open Steam remain visible while a game is running. Open Steam brings your Library forward."),
-        ("rectangle.expand.vertical","Per-game launch options",
-         "Choose common, display or custom resolutions and sync your choices to Steam Properties."),
-        ("cursorarrow.motionlines","Input and fullscreen repairs",
-         "Fixes raw-input timing and a captured fullscreen startup deadlock. Occasional black screens still require quitting and restarting the game."),
-        ("circle.lefthalf.filled","Black and white",
-         "A monochrome icon, solid backgrounds and a simpler main screen."),
+        ("gamecontroller","SCP: Secret Laboratory",
+         "MacSL installs Steam in its own environment and starts SCP: Secret Laboratory on Direct3D 11 through DXMT, Recall's Metal translation."),
+        ("rectangle.expand.vertical","Launch options",
+         "Choose fullscreen or windowed and a resolution. MacSL writes them to Steam's launch options and the game's own window-mode setting."),
+        ("cursorarrow.motionlines","Raw mouse and Game Mode",
+         "The mouse is read directly, and the game starts as a Mac game so macOS gives it priority."),
+        ("exclamationmark.triangle","Early build",
+         "Unsigned community build based on MacVolvo and Recall. Performance hasn't been measured against CrossOver yet."),
     ]
 }

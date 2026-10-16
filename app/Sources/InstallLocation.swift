@@ -4,15 +4,15 @@ import Foundation
 // The internal default needs no decision; another folder is checked here when
 // picked, and the setup helper enforces the same drive rules for any new folder.
 enum InstallLocation {
-    static let folderName="MacVolvo"
+    static let folderName="MacSL"
     static let savedKey="installLocation"
     static var standard:URL { FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent(folderName) }
     static func isStandard(_ root:URL)->Bool { root.standardizedFileURL.path == standard.standardizedFileURL.path }
     /// Picking an existing app-made folder reconnects it; any other folder gets
-    /// an MacVolvo folder inside it.
+    /// an MacSL folder inside it.
     static func root(forChosen folder:URL)->URL {
         let folder=folder.standardizedFileURL
-        let marker=folder.appendingPathComponent(".macvolvo-owner").path
+        let marker=folder.appendingPathComponent(".macsl-owner").path
         return folder.lastPathComponent == folderName || FileManager.default.fileExists(atPath:marker) ? folder : folder.appendingPathComponent(folderName)
     }
     /// False while the drive holding the folder is disconnected. The helper never
@@ -60,7 +60,7 @@ enum InstallLocation {
             return "Folders synced to iCloud Drive or other cloud storage aren’t supported. Choose a folder that isn’t synced."
         }
         let fm=FileManager.default
-        if fm.fileExists(atPath:root.path),!fm.fileExists(atPath:root.appendingPathComponent(".macvolvo-owner").path),
+        if fm.fileExists(atPath:root.path),!fm.fileExists(atPath:root.appendingPathComponent(".macsl-owner").path),
            (try? fm.contentsOfDirectory(atPath:root.path))?.isEmpty == false {
             return "That “\(folderName)” folder already contains other files. Choose another location."
         }

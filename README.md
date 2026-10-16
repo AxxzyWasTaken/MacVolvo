@@ -1,3 +1,25 @@
+# MacSL
+
+**SCP: Secret Laboratory on Apple Silicon.** A fork of [MacVolvo](https://github.com/haeli05/MacVolvo)
+(itself built on [Recall](https://github.com/AsherJN/recall)) that runs the Windows version of Steam in a
+private Wine environment and starts SCP: Secret Laboratory on Direct3D 11 through DXMT, with Recall's
+frame pacing, raw mouse input and Game Mode.
+
+- Game table: `scripts/portable_steam.h` (`scpsl`, Steam app 700330, `SCPSL.exe`, `-force-d3d11`).
+- Launch options use Unity's switches (`-screen-fullscreen`, `-window-mode exclusive|windowed`,
+  `-screen-width/-height`). SCP:SL re-applies its saved window mode after start-up, so the launcher also
+  writes it to the game's `registry.txt` (`UserSettings_0A50_2000`), keeping a `.macsl-backup`.
+- Own identity: `MacSL.app`, bundle `app.macsl.launcher`, data in `~/Library/Application Support/MacSL`.
+  It never touches MacVolvo, Recall or CrossOver.
+- Runtime: Recall 1.3.0's `runtime.tar.gz` (`phase2-20261007.3`), extracted from Recall's release DMG.
+- Unsigned community build: `python3 scripts/build_native_app.py --output runtime/build/MacSL.app`, then
+  sign ad hoc. Performance has not been measured against CrossOver yet.
+
+SCP: Secret Laboratory ships Northwood's own anti-cheat (`SL-AC.dll`). MacSL runs the game unmodified
+through Wine, but that isn't supported by Northwood.
+
+---
+
 # MacVolvo
 
 **Counter-Strike 2 and Deadlock on Apple Silicon.**
