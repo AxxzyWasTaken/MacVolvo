@@ -7,17 +7,10 @@ The earlier unsigned candidate remains build 5 with phase2-20261014.1.
 
 ## Current release candidate
 
-The unsigned ZIP is a test build, not a notarized public installer. Do not
-rename it to a DMG or offer it through the automatic updater. The updater
-requires notarization and the expected Developer ID team.
-
-```sh
-python3 scripts/build_native_app.py --output runtime/build/v1.0/MacVolvo.app \
-  --runtime-archive runtime/build/signed-runtime/macvolvo-1.0-signed.1.tar.gz
-ditto -c -k --sequesterRsrc --keepParent runtime/build/v1.0/MacVolvo.app \
-  runtime/release/MacVolvo-1.0-unsigned.zip
-shasum -a 256 runtime/release/MacVolvo-1.0-unsigned.zip
-```
+The app and `runtime/release/MacVolvo-1.0.dmg` are Developer ID signed,
+Apple notarized, stapled and Gatekeeper-verified. The earlier unsigned ZIP is
+retained as a historical build 5 artifact. See [SIGNING.md](SIGNING.md) for the
+commands, submission IDs and installer checksum.
 
 Runtime source identities and patches are in `SOURCES.json`. Before public
 binary publication, finish the dependency source/license closure and full-runtime

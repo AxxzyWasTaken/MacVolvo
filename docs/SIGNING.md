@@ -8,7 +8,13 @@ tests and four signing-input tests passed. The unsigned native code is identical
 to the preceding candidate; this is a signing change, not a new game fix.
 
 Apple submission: `dc249d02-8564-43ec-ad2c-82856e747036` (October 15, 2026).
-Last checked: **In Progress**. No notarized DMG is available yet.
+Apple **accepted** the app and unpacked runtime. The app is stapled and passes
+Gatekeeper as `Notarized Developer ID`. The DMG is also accepted, stapled and
+Gatekeeper-verified (October 16, 2026). DMG submission:
+`cb06b4c8-6bab-42a7-8924-810b9670a1fb`.
+
+Installer: `runtime/release/MacVolvo-1.0.dmg` (242,555,182 bytes).
+SHA-256: `9db10b59ea5d94fb5b259ed971e14032dbed52489a6da77c8b0bd38461003c7a`.
 
 ```sh
 xcrun notarytool info dc249d02-8564-43ec-ad2c-82856e747036 \
@@ -16,8 +22,9 @@ xcrun notarytool info dc249d02-8564-43ec-ad2c-82856e747036 \
 open runtime/build/v1.0-signed/MacVolvo.app
 ```
 
-The signed app can be launched locally. Complete the notarization and packaging
-steps below after Apple accepts it; do not interpret signing as notarization.
+Quit the existing MacVolvo launcher before opening the notarized app above.
+Finish any running game before switching runtime versions. The commands
+below document how to reproduce signing, notarization and packaging.
 
 ## Launch the earlier local build
 
