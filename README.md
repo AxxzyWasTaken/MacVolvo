@@ -20,6 +20,17 @@ through Wine, but that isn't supported by Northwood.
 
 ---
 
+
+## On top of CrossOver instead
+
+`crossover/macsl-crossover.sh` uses your existing CrossOver bottle (Steam and the game already installed)
+and only switches its graphics backend: `macsl-crossover dxmt`, `d3dmetal`, `status`, `play`, `undo`.
+It edits the bottle's `cxbottle.conf` (backup: `cxbottle.conf.macsl-backup`) and never touches CrossOver.app.
+CrossOver's DXMT is stock DXMT: Recall's engine patches (frame pacing, fullscreen canvas, raw mouse) need
+Recall's Wine and are only in the standalone app.
+
+---
+
 # MacVolvo
 
 **Counter-Strike 2 and Deadlock on Apple Silicon.**
