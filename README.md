@@ -21,13 +21,27 @@ through Wine, but that isn't supported by Northwood.
 ---
 
 
-## On top of CrossOver instead
+## On top of CrossOver and NotProton instead
 
-`crossover/macsl-crossover.sh` uses your existing CrossOver bottle (Steam and the game already installed)
-and only switches its graphics backend: `macsl-crossover dxmt`, `d3dmetal`, `status`, `play`, `undo`.
-It edits the bottle's `cxbottle.conf` (backup: `cxbottle.conf.macsl-backup`) and never touches CrossOver.app.
-CrossOver's DXMT is stock DXMT: Recall's engine patches (frame pacing, fullscreen canvas, raw mouse) need
-Recall's Wine and are only in the standalone app.
+`crossover/macsl-crossover.sh` reuses what you already have: the CrossOver bottle (Steam and the game
+installed) and macOS Steam with NotProton. It only picks SCP:SL's graphics backend.
+
+```
+macsl-crossover dxmt        # CrossOver bottle + NotProton launch options -> DXMT
+macsl-crossover d3dmetal    # back to D3DMetal
+macsl-crossover auto on     # keep it applied: login, bottle/Steam config changes, new CrossOver versions
+macsl-crossover status | play | ensure | auto off | undo
+```
+
+- CrossOver: sets `CX_GRAPHICS_BACKEND` in the bottle's `cxbottle.conf` (backup `cxbottle.conf.macsl-backup`).
+- NotProton: sets `CX_GRAPHICS_BACKEND=<backend>` in SCP:SL's macOS Steam launch options
+  (`crossover/macsl_steam_options.py`, backup `localconfig.vdf.macsl-backup`). NotProton passes it to whichever
+  CrossOver build it maps the game to, so new CrossOver versions pick it up. Steam rewrites the file when it
+  quits, so changes wait until macOS Steam is closed.
+- `auto on` installs a LaunchAgent (`app.macsl.ensure`) that re-applies the choice at login, every 30 minutes
+  and whenever the bottle config, Steam's launch options, `compatibilitytools.d` or CrossOver.app change.
+- Nothing inside CrossOver.app or NotProton is modified. CrossOver's DXMT is stock DXMT: Recall's engine
+  patches (frame pacing, fullscreen canvas, raw mouse) need Recall's Wine and are only in the standalone app.
 
 ---
 
