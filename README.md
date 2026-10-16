@@ -1,20 +1,17 @@
-<h1 align="center">
-  <img src="app/Resources/Wordmark.png" width="420" alt="MacVolvo">
-</h1>
+# MacVolvo
 
-<h3 align="center">Counter-Strike 2 and Deadlock on your Mac.</h3>
+**Counter-Strike 2 and Deadlock on Apple Silicon.**
 
-<p align="center">
-The year is 2026 CE. Lord Gaben of house Volvo hath not giveth us plebeians on Macintosh Deadlock, nor Counter Strike 2.
+A free, open-source Mac launcher built on [Recall](https://github.com/AsherJN/recall).
+Install Steam, choose your game, and play through Wine and DXMT.
 
-So I said fuck Gaben (Peace be upon him) and prayed to Mechanicus Claude Opus instead.
+[Introduction](https://haeli05.github.io/MacVolvo/) ·
+[Downloads & releases](https://github.com/haeli05/MacVolvo/releases) ·
+[Report a bug](https://github.com/haeli05/MacVolvo/issues)
 
-MacVolvo is a free, open-source app for playing Valve's Source 2 games on Apple Silicon, built on optimizations from <a href="https://github.com/AsherJN/recall">Recall</a>.</p>
-
----
-
-> **Early release.** MacVolvo 0.1 runs Steam, Counter-Strike 2 and Deadlock on Recall's
-> engine. Expect rough edges: see [Known issues](#known-issues).
+> **v1.0 release candidate.** Known launch, audio and performance issues remain.
+> Read the release notes before downloading. Build 6 is Developer ID signed and
+> notarized; the installer remains in the draft release pending release review.
 
 ## What it does
 
@@ -22,9 +19,9 @@ Valve dropped macOS support when Counter-Strike 2 replaced CS:GO, and Deadlock h
 had a Mac version. MacVolvo installs the Windows version of Steam into a private Wine
 environment, and you play from there, with no CrossOver, Windows or Boot Camp needed.
 
-It is a fork of [Recall](https://github.com/AsherJN/recall), Josh Nelson's app for playing
-Overwatch on the Mac. Recall averaged about 70% more FPS than CrossOver on the same Mac, with
-much better 1% lows and fewer stutters. That work carries over:
+MacVolvo builds on [Recall](https://github.com/AsherJN/recall), Joshua Asher Nelson's
+work on running Overwatch on the Mac. Its performance results are not CS2 or
+Deadlock benchmarks.
 
 - **Wine**, built from CodeWeavers' CrossOver 26.3 sources, runs Steam and the games.
 - **Rosetta** translates the games' Intel code to Apple Silicon.
@@ -38,8 +35,8 @@ See [how Recall runs faster](docs/HOW-IT-WORKS.md) for the engine details.
 
 ## Get started
 
-1. **Download MacVolvo** from the [releases page](https://github.com/haeli05/MacVolvo/releases/latest),
-   open the disk image and drag MacVolvo to Applications.
+1. **Download MacVolvo** from [GitHub Releases](https://github.com/haeli05/MacVolvo/releases).
+   Read the package’s signing status and installation instructions, then move MacVolvo to Applications.
 2. **Open MacVolvo** and follow the setup steps. It prepares everything and installs Steam.
 3. **Open Steam, sign in,** and install Counter-Strike 2 or Deadlock from your Library.
 4. **Pick a game in MacVolvo and press Play.**
@@ -61,14 +58,20 @@ an account you're prepared to take that risk with.
 
 ## Known issues
 
-- **Steam's store and profile pages flicker while they load.** Once a page has loaded it
-  draws normally. Steam's window uses a workaround for a Wine 11 bug (its browser draws black
-  with the GPU off).
-- **First matches stutter** while each game compiles its shaders for your Mac. It settles as
-  you play the same maps again.
-- **Audio can buzz or crackle.** In Audio MIDI Setup, try 96 kHz if your output supports it;
-  this resolved the issue on the tested M2 Max. Other outputs may work better at 48 kHz.
-  MacVolvo leaves the system audio format under your control.
+- **Black screen with sound on launch:** quit the game completely and restart it.
+  This can happen from either MacVolvo or Steam. A captured fullscreen deadlock is
+  fixed, but the intermittent symptom is not considered fully resolved.
+- **Audio static or crackling:** open **Audio MIDI Setup → Window → Show Audio Devices**,
+  select your output device, and set **Format to 96,000 Hz (96 kHz)** if supported.
+  Quit and restart the game afterward. This workaround helped on the tested M2 Max;
+  MacVolvo does not change your system audio format.
+- **CS2 combat lag spikes / severe FPS drops:** still under investigation.
+  Shader compilation can cause initial stutters, but it does not explain every report.
+- **Deadlock camera stops responding after a match:** clicks may still work.
+  Quit and restart the game. Post-match recovery has not been fully verified.
+- **Steam store/profile flicker:** pages may flicker while loading.
+
+See [v1.0 release notes](docs/releases/v1.0.md) for the current validation limits.
 
 ## Building from source
 

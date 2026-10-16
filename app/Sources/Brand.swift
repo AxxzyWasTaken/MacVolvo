@@ -17,7 +17,7 @@ enum Brand {
     static let releaseFeed=URL(string:"https://api.github.com/repos/\(repositoryPath)/releases/latest")!
     static func diskImage(_ version:String)->String { "\(name)-\(version).dmg" }
     static let trademarks="Not affiliated with or endorsed by Valve Corporation, Volvo, Blizzard Entertainment or Apple. Counter-Strike, Deadlock and Steam are trademarks of Valve Corporation. Mac is a trademark of Apple Inc. Based on Recall by Joshua Asher Nelson."
-    /// Who makes MacVolvo: shown under the wordmark and in About.
+    /// Who makes MacVolvo: shown in About.
     static let author="@haeli05"
     static let authorPage=URL(string:"https://github.com/haeli05")!
     /// The project MacVolvo is built on.
